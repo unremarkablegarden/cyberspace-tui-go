@@ -1,0 +1,16 @@
+{
+  "name": "Crypt",
+  "description": "Emergency terminal mode",
+  "colors": {
+    "bright": "196",
+    "primary": "160",
+    "normal": "124",
+    "dim": "124",
+    "muted": "88",
+    "dark": "88",
+    "error": "196",
+    "bg_dark": "232",
+    "bg_select": "52",
+    "highlight": "0"
+  }
+}

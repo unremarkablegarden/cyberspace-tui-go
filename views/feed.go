@@ -1,16 +1,19 @@
 package views
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/euklides/cyberspace-cli/api"
-	"github.com/euklides/cyberspace-cli/models"
-	"github.com/euklides/cyberspace-cli/styles"
+	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // PostsLoadedMsg is sent when posts are fetched
@@ -35,11 +38,12 @@ type OpenPostMsg struct {
 	Post models.Post
 }
 
+// LogoutMsg is sent when the user wants to log out
+type LogoutMsg struct{}
+
 // FeedModel is the post feed screen
 type FeedModel struct {
-	posts       []models.Post
-	cursor      int
-	scrollOff   int
+	list        list.Model
 	loading     bool
 	loadingMore bool
 	spinner     spinner.Model
@@ -49,15 +53,43 @@ type FeedModel struct {
 	hasMore     bool
 	width       int
 	height      int
+	keys FeedKeyMap
+	help help.Model
 }
 
 // NewFeedModel creates a new feed screen
 func NewFeedModel(baseURL, idToken string) FeedModel {
+	// Create list with custom delegate
+	delegate := PostDelegate{}
+	l := list.New([]list.Item{}, delegate, 0, 0)
+	l.SetShowTitle(false)
+	l.SetShowFilter(false)
+	l.SetFilteringEnabled(false)
+	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
+	l.SetShowHelp(false)
+	l.Styles = styles.ListStyles()
+
+	// Pagination dots: half blocks, bright for active, dim for inactive
+	l.Paginator.ActiveDot = styles.Bright.Render("▄")
+	l.Paginator.InactiveDot = styles.Dark.Render("▄")
+
+	// Disable list's built-in quit — we handle it ourselves
+	l.KeyMap.Quit.SetEnabled(false)
+	// Disable ForceQuit too (ctrl+c handled by main.go)
+	l.KeyMap.ForceQuit.SetEnabled(false)
+
+	h := help.New()
+	h.Styles = styles.HelpStyles()
+
 	return FeedModel{
-		client:  api.NewClient(baseURL, idToken),
-		spinner: NewSpinner(),
-		loading: true,
-		hasMore: true,
+		list:     l,
+		client:   api.NewClient(baseURL, idToken),
+		spinner:  NewSpinner(),
+		loading:  true,
+		hasMore:  true,
+		keys: NewFeedKeyMap(),
+		help: h,
 	}
 }
 
@@ -68,61 +100,64 @@ func (m FeedModel) Init() tea.Cmd {
 func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Don't process keys during initial load
 		if m.loading {
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case "j", "down":
-			maxCursor := len(m.posts) - 1
-			if m.hasMore {
-				maxCursor = len(m.posts) // load more button
-			}
-			if m.cursor < maxCursor {
-				m.cursor++
-				m.adjustScroll()
-			}
-		case "k", "up":
-			if m.cursor > 0 {
-				m.cursor--
-				m.adjustScroll()
-			}
-		case "g":
-			m.cursor = 0
-			m.scrollOff = 0
-		case "G":
-			if m.hasMore {
-				m.cursor = len(m.posts) // Go to load more button
-			} else {
-				m.cursor = len(m.posts) - 1
-			}
-			m.adjustScroll()
-		case "r":
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
-		case "enter":
-			if len(m.posts) > 0 {
-				if m.cursor == len(m.posts) && m.hasMore {
-					// Load more button
+		case key.Matches(msg, m.keys.Logout):
+			return m, func() tea.Msg { return LogoutMsg{} }
+		case key.Matches(msg, m.keys.Open):
+			if item := m.list.SelectedItem(); item != nil {
+				switch it := item.(type) {
+				case PostItem:
+					return m, func() tea.Msg {
+						return OpenPostMsg{Post: it.Post}
+					}
+				case LoadMoreItem:
 					if !m.loadingMore {
 						m.loadingMore = true
 						return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
 					}
-				} else if m.cursor < len(m.posts) {
-					return m, func() tea.Msg {
-						return OpenPostMsg{Post: m.posts[m.cursor]}
+				}
+			}
+		}
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionRelease && !m.loading {
+			// Check if a post card was clicked
+			for _, item := range m.list.Items() {
+				if pi, ok := item.(PostItem); ok {
+					if zone.Get(pi.Post.ID).InBounds(msg) {
+						post := pi.Post
+						return m, func() tea.Msg {
+							return OpenPostMsg{Post: post}
+						}
 					}
 				}
+			}
+			// Check load more
+			if zone.Get("load-more").InBounds(msg) && m.hasMore && !m.loadingMore {
+				m.loadingMore = true
+				return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
 			}
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.adjustScroll()
+		// Reserve space for our custom header (2 lines) and footer (2 lines)
+		m.list.SetSize(msg.Width, msg.Height-4)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -131,22 +166,55 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case PostsLoadedMsg:
 		m.loading = false
-		m.posts = msg.Posts
-		m.cursor = 0
-		m.scrollOff = 0
+		m.err = nil
+		items := postsToItems(msg.Posts)
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
+		if m.hasMore {
+			items = append(items, LoadMoreItem{})
+		}
+		cmd := m.list.SetItems(items)
+		return m, cmd
 
 	case MorePostsLoadedMsg:
 		m.loadingMore = false
-		m.posts = append(m.posts, msg.Posts...)
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
+		// Build new full items list
+		var items []list.Item
+		for _, existing := range m.list.Items() {
+			if _, ok := existing.(LoadMoreItem); ok {
+				continue // remove old load-more sentinel
+			}
+			items = append(items, existing)
+		}
+		for _, p := range msg.Posts {
+			items = append(items, PostItem{Post: p})
+		}
+		if m.hasMore {
+			items = append(items, LoadMoreItem{})
+		}
+		cmd := m.list.SetItems(items)
+		return m, cmd
 
 	case PostsErrorMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
+
+	case ThemeChangedMsg:
+		m.spinner.Style = styles.Spinner
+		m.list.Styles = styles.ListStyles()
+		m.help.Styles = styles.HelpStyles()
+		m.list.Paginator.ActiveDot = styles.Bright.Render("▄")
+		m.list.Paginator.InactiveDot = styles.Dark.Render("▄")
+	}
+
+	// Forward all other messages to the list
+	if !m.loading {
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -163,62 +231,27 @@ func (m FeedModel) View() string {
 		return m.renderErrorScreen(w, h)
 	}
 
-	if len(m.posts) == 0 {
-		return m.renderEmptyScreen(w, h)
-	}
-
 	var b strings.Builder
 
-	// Header with sci-fi styling
-	header := m.renderHeader(w)
-	b.WriteString(header)
+	// Header: centered title with blocks on each side
+	b.WriteString(m.renderHeader(w))
 
-	// Calculate visible items (accounting for header and footer)
-	totalItems := len(m.posts)
-	if m.hasMore {
-		totalItems++ // +1 for load more button
-	}
-	visibleItems := m.visiblePostCount()
+	// List content (title disabled, we render our own header)
+	b.WriteString(m.list.View())
 
-	// Render posts and load more button
-	var postLines int
-	for i := m.scrollOff; i < totalItems && i < m.scrollOff+visibleItems; i++ {
-		var item string
-		if i < len(m.posts) {
-			item = m.renderPost(m.posts[i], i == m.cursor, w)
-		} else {
-			// Load more button
-			item = m.renderLoadMoreButton(i == m.cursor, w)
-		}
-		b.WriteString(item)
-		b.WriteString("\n")
-		postLines += strings.Count(item, "\n") + 1
-	}
+	// Footer: divider with paginator inline on the right
+	b.WriteString("\n")
+	b.WriteString(m.renderFooter(w))
 
-	// Footer area
-	headerLines := 3
-	footerLines := 2 // divider + status/help line
-	usedLines := headerLines + postLines
-	paddingNeeded := h - usedLines - footerLines
-
-	// Add blank lines to push footer to bottom
-	for i := 0; i < paddingNeeded; i++ {
-		b.WriteString("\n")
-	}
-
-	// Status bar (includes help text on same line)
-	b.WriteString(m.renderStatusBar(w))
-
+	_ = h // height managed by list.SetSize
 	return b.String()
 }
 
 func (m FeedModel) renderHeader(width int) string {
-	// Title centered with yellow bar across full width
 	title := "▓▒░ ᑕ¥βєяรקค¢є ░▒▓"
 	titleRendered := styles.Title.Render(title)
 	titleWidth := lipgloss.Width(titleRendered)
 
-	// Calculate bar widths for centering
 	barWidth := (width - titleWidth) / 2
 	if barWidth < 0 {
 		barWidth = 0
@@ -228,49 +261,37 @@ func (m FeedModel) renderHeader(width int) string {
 		rightBarWidth = 0
 	}
 
-	// Yellow bar on left + centered title + yellow bar on right
 	barStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	leftBar := barStyle.Render(strings.Repeat("█", barWidth))
 	rightBar := barStyle.Render(strings.Repeat("█", rightBarWidth))
 
-	return leftBar + titleRendered + rightBar + "\n\n"
+	return leftBar + titleRendered + rightBar + "\n"
 }
 
-func (m FeedModel) renderStatusBar(width int) string {
-	// Left side: position (show "LOAD MORE" if on that button)
-	var leftSide string
-	if m.cursor == len(m.posts) {
-		leftSide = styles.StatusBarSegment("ACTION", "LOAD MORE")
-	} else {
-		leftSide = styles.StatusBarSegment("POST", fmt.Sprintf("%d/%d", m.cursor+1, len(m.posts)))
+func (m FeedModel) renderFooter(width int) string {
+	helpView := m.help.View(m.keys)
+	paginatorView := m.list.Paginator.View()
+
+	helpWidth := lipgloss.Width(helpView)
+	paginatorWidth := lipgloss.Width(paginatorView)
+
+	// help ────── paginator
+	dividerWidth := width - helpWidth - paginatorWidth - 2
+	if dividerWidth < 1 {
+		dividerWidth = 1
 	}
 
-	// Right side: help text
-	rightSide := styles.Dim.Render("[j/k] Navigate  [ENTER] Open  [r] Refresh  [q] Quit")
-
-	// Calculate spacing
-	leftWidth := lipgloss.Width(leftSide)
-	rightWidth := lipgloss.Width(rightSide)
-	spacing := width - leftWidth - rightWidth
-	if spacing < 1 {
-		spacing = 1
-	}
-
-	return styles.Divider(width) + "\n" +
-		leftSide + strings.Repeat(" ", spacing) + rightSide
+	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 func (m FeedModel) renderLoadingScreen(width, height int) string {
 	var b strings.Builder
 
-	// Centered loading animation
 	loadingBox := styles.DataBox("ESTABLISHING CONNECTION",
 		"\n"+
-		"  "+m.spinner.View()+" Synchronizing with network...\n"+
-		"\n"+
-		"  "+styles.ProgressBarSimple(0.3, 30)+"\n"+
-		"\n"+
-		"  "+styles.Dim.Render("Please wait while we access the datastream")+"\n",
+			"  "+m.spinner.View()+styles.Normal.Render(" Synchronizing with network...")+"\n"+
+			"\n"+
+			"  "+styles.Dim.Render("Please wait while we access the datastream")+"\n",
 		50)
 
 	return FullScreen(b.String()+loadingBox, width, height, lipgloss.Center, lipgloss.Center)
@@ -284,165 +305,11 @@ func (m FeedModel) renderErrorScreen(width, height int) string {
 	return FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
-func (m FeedModel) renderEmptyScreen(width, height int) string {
-	emptyBox := styles.DataBox("NO DATA",
-		"\n"+
-		"  "+styles.Dim.Render("No transmissions detected in this sector")+"\n"+
-		"\n"+
-		"  "+styles.Help.Render("Press [r] to rescan frequency")+"\n",
-		45)
-
-	return FullScreen(emptyBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-func (m FeedModel) visiblePostCount() int {
-	visibleHeight := m.height - 5 // header + footer
-	postHeight := 6               // average post height (borders + content + gap)
-	count := visibleHeight / postHeight
-	if count < 1 {
-		return 1
-	}
-	return count
-}
-
-func (m *FeedModel) adjustScroll() {
-	visiblePosts := m.visiblePostCount()
-
-	if m.cursor >= m.scrollOff+visiblePosts {
-		m.scrollOff = m.cursor - visiblePosts + 1
-	}
-	if m.cursor < m.scrollOff {
-		m.scrollOff = m.cursor
-	}
-}
-
-func (m FeedModel) renderPost(p models.Post, selected bool, width int) string {
-	innerWidth := width - 4 // Account for box borders and padding
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
-
-	// Username on left, time + stats on right
-	username := "@" + p.AuthorUsername
-
-	// Format stats: "2 replies · 1 save" or "0 replies · 0 saves"
-	replyWord := "replies"
-	if p.RepliesCount == 1 {
-		replyWord = "reply"
-	}
-	saveWord := "saves"
-	if p.BookmarksCount == 1 {
-		saveWord = "save"
-	}
-	rightStats := fmt.Sprintf("%d %s · %d %s · %s",
-		p.RepliesCount, replyWord,
-		p.BookmarksCount, saveWord,
-		TimeAgo(p.CreatedAt))
-
-	// Calculate spacing for header line
-	usernameWidth := len(username)
-	statsWidth := len(rightStats)
-	headerSpacing := innerWidth - usernameWidth - statsWidth
-	if headerSpacing < 1 {
-		headerSpacing = 1
-	}
-
-	// Build header line
-	headerLine := styles.Username.Render(username) +
-		strings.Repeat(" ", headerSpacing) +
-		styles.Dim.Render(rightStats)
-
-	// Content (limited to ~2 lines worth for preview) - strip markdown for performance
-	content := Truncate(StripMarkdown(p.Content), innerWidth*2-3)
-
-	// Topics with [brackets]
-	var tagsLine string
-	if len(p.Topics) > 0 {
-		tags := make([]string, len(p.Topics))
-		for i, t := range p.Topics {
-			tags[i] = "[" + t + "]"
-		}
-		tagsLine = styles.Dim.Render(strings.Join(tags, " "))
-	}
-
-	// Build box content
-	var boxContent strings.Builder
-	boxContent.WriteString(headerLine)
-	boxContent.WriteString("\n")
-	boxContent.WriteString(content)
-	if tagsLine != "" {
-		boxContent.WriteString("\n")
-		boxContent.WriteString(tagsLine)
-	}
-
-	// Choose border style based on selection
-	if selected {
-		// Bright border for selected
-		return renderPostBox(boxContent.String(), innerWidth, true)
-	}
-
-	// Dim border for unselected
-	return renderPostBox(boxContent.String(), innerWidth, false)
-}
-
-// renderPostBox renders a post inside a box with max lines limit
-func renderPostBox(content string, width int, selected bool) string {
-	var borderColor lipgloss.Color
-	if selected {
-		borderColor = styles.ColorBright
-	} else {
-		borderColor = styles.ColorDim
-	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-
-	// Top border
-	top := borderStyle.Render("┌" + strings.Repeat("─", width) + "┐")
-
-	// Bottom border
-	bottom := borderStyle.Render("└" + strings.Repeat("─", width) + "┘")
-
-	innerWidth := width - 2 // Account for padding spaces
-
-	// Wrap content lines, but limit total lines to keep consistent height
-	lines := strings.Split(content, "\n")
-	var middle strings.Builder
-	totalLines := 0
-	maxLines := 4 // header + 2 content lines + tags
-
-	for _, line := range lines {
-		if totalLines >= maxLines {
-			break
-		}
-		// Wrap long lines to fit within the box
-		wrappedLines := wrapText(line, innerWidth)
-		for _, wl := range wrappedLines {
-			if totalLines >= maxLines {
-				break
-			}
-			lineWidth := lipgloss.Width(wl)
-			padding := innerWidth - lineWidth
-			if padding < 0 {
-				padding = 0
-			}
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString(" ")
-			middle.WriteString(wl)
-			middle.WriteString(strings.Repeat(" ", padding))
-			middle.WriteString(" ")
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString("\n")
-			totalLines++
-		}
-	}
-
-	return top + "\n" + middle.String() + bottom
-}
-
 // SetSize updates the view dimensions
 func (m *FeedModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.list.SetSize(width, height-4)
 }
 
 func (m FeedModel) fetchPosts() tea.Cmd {
@@ -465,26 +332,10 @@ func (m FeedModel) fetchMorePosts() tea.Cmd {
 	}
 }
 
-func (m FeedModel) renderLoadMoreButton(selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
+func postsToItems(posts []models.Post) []list.Item {
+	items := make([]list.Item, len(posts))
+	for i, p := range posts {
+		items[i] = PostItem{Post: p}
 	}
-
-	var content string
-	if m.loadingMore {
-		content = m.spinner.View() + " Loading more posts..."
-	} else {
-		content = "▼ LOAD MORE POSTS ▼"
-	}
-
-	// Center the content
-	contentWidth := lipgloss.Width(content)
-	padding := (innerWidth - contentWidth) / 2
-	if padding < 0 {
-		padding = 0
-	}
-	centeredContent := strings.Repeat(" ", padding) + content
-
-	return renderPostBox(centeredContent, innerWidth, selected)
+	return items
 }

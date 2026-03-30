@@ -5,11 +5,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
-	"github.com/euklides/cyberspace-cli/styles"
+	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // TimeAgo formats a time as a relative string (e.g., "5m", "2h", "3d")
@@ -33,47 +35,68 @@ func TimeAgo(t time.Time) string {
 	}
 }
 
-// Truncate shortens a string to max length with ellipsis
+// Truncate shortens a string to max visual width with ellipsis
 func Truncate(s string, max int) string {
-	if len(s) <= max {
+	if lipgloss.Width(s) <= max {
 		return s
 	}
 	if max <= 3 {
-		return s[:max]
+		max = 3
 	}
-	return s[:max-3] + "..."
+	target := max - 3
+	width := 0
+	for i, r := range s {
+		w := runewidth.RuneWidth(r)
+		if width+w > target {
+			return s[:i] + "..."
+		}
+		width += w
+	}
+	return s + "..."
+}
+
+var (
+	reLink       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	reBold       = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	reBoldUndsc  = regexp.MustCompile(`__(.+?)__`)
+	reItalic     = regexp.MustCompile(`\*(.+?)\*`)
+	reItalUndsc  = regexp.MustCompile(`\b_(.+?)_\b`)
+	reCode       = regexp.MustCompile("`([^`]+)`")
+	reHeading    = regexp.MustCompile(`(?m)^#{1,6}\s+`)
+	reCodeBlock  = regexp.MustCompile("(?s)```[a-z]*\n?(.*?)```")
+)
+
+// stripMarkdownCommon applies shared markdown stripping rules
+func stripMarkdownCommon(s string) string {
+	s = reCodeBlock.ReplaceAllString(s, "$1")
+	s = reLink.ReplaceAllString(s, "$1")
+	s = reBold.ReplaceAllString(s, "$1")
+	s = reBoldUndsc.ReplaceAllString(s, "$1")
+	s = reItalic.ReplaceAllString(s, "$1")
+	s = reItalUndsc.ReplaceAllString(s, "$1")
+	s = reCode.ReplaceAllString(s, "$1")
+	s = reHeading.ReplaceAllString(s, "")
+	// Replace HTML entities
+	s = strings.ReplaceAll(s, "&nbsp;", " ")
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", "\"")
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	s = ReplaceEmojis(s)
+	return s
 }
 
 // StripMarkdown removes basic markdown formatting for plain text display (single line)
 func StripMarkdown(s string) string {
-	// Convert markdown links [text](url) to just the text
-	linkRegex := regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
-	s = linkRegex.ReplaceAllString(s, "$1")
-
-	// Remove other markdown formatting
-	s = strings.ReplaceAll(s, "**", "")
-	s = strings.ReplaceAll(s, "__", "")
-	s = strings.ReplaceAll(s, "*", "")
-	s = strings.ReplaceAll(s, "_", "")
-	s = strings.ReplaceAll(s, "`", "")
-	s = strings.ReplaceAll(s, "#", "")
+	s = stripMarkdownCommon(s)
 	s = strings.ReplaceAll(s, "\n", " ")
 	return strings.TrimSpace(s)
 }
 
 // StripMarkdownKeepNewlines removes markdown formatting but preserves line breaks
 func StripMarkdownKeepNewlines(s string) string {
-	// Convert markdown links [text](url) to just the text
-	linkRegex := regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
-	s = linkRegex.ReplaceAllString(s, "$1")
-
-	// Remove other markdown formatting
-	s = strings.ReplaceAll(s, "**", "")
-	s = strings.ReplaceAll(s, "__", "")
-	s = strings.ReplaceAll(s, "*", "")
-	s = strings.ReplaceAll(s, "_", "")
-	s = strings.ReplaceAll(s, "`", "")
-	s = strings.ReplaceAll(s, "#", "")
+	s = stripMarkdownCommon(s)
 	return strings.TrimSpace(s)
 }
 
@@ -102,14 +125,6 @@ func Clamp(value, min, max int) int {
 		return max
 	}
 	return value
-}
-
-// SafeWidth returns a width that's safe for rendering (minimum 1)
-func SafeWidth(width, defaultWidth int) int {
-	if width < 1 {
-		return defaultWidth
-	}
-	return width
 }
 
 // SafeDimensions returns width and height with sensible defaults
@@ -210,83 +225,6 @@ func NewSpinner() spinner.Model {
 	return s
 }
 
-// NewDataSpinner creates an alternative data-transfer style spinner
-func NewDataSpinner() spinner.Model {
-	s := spinner.New()
-	s.Spinner = spinner.Spinner{
-		Frames: []string{"▓▒░", "░▓▒", "▒░▓"},
-		FPS:    time.Millisecond * 150,
-	}
-	s.Style = styles.Spinner
-	return s
-}
-
-// RenderHeader renders a sci-fi styled header with title and help text
-func RenderHeader(title, help string, width int) string {
-	var b strings.Builder
-
-	// Title with sci-fi decoration
-	titleStyled := styles.Title.Render("▓▒░ " + title + " ░▒▓")
-	b.WriteString(titleStyled)
-
-	if help != "" {
-		b.WriteString("  ")
-		b.WriteString(styles.Help.Render(help))
-	}
-	b.WriteString("\n")
-
-	// Double divider
-	dividerWidth := width
-	if dividerWidth < 1 {
-		dividerWidth = 80
-	}
-	b.WriteString(styles.DoubleDivider(dividerWidth))
-	b.WriteString("\n")
-
-	return b.String()
-}
-
-// RenderError renders a sci-fi styled error message centered on screen
-func RenderError(err error, hint string, width, height int) string {
-	errorBox := styles.AlertBox(err.Error(), "error", 50)
-	if hint != "" {
-		errorBox += "\n\n" + styles.Dim.Render(hint)
-	}
-	return FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-// RenderLoading renders a sci-fi styled loading message centered on screen
-func RenderLoading(s spinner.Model, message string, width, height int) string {
-	loadingContent := styles.DataBox("PROCESSING",
-		"\n"+
-			"  "+s.View()+" "+message+"\n"+
-			"\n"+
-			"  "+styles.ProgressBarSimple(0.3, 25)+"\n"+
-			"\n",
-		45)
-	return FullScreen(loadingContent, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-// FormatTopics formats a topics array with sci-fi brackets
-func FormatTopics(topics []string) string {
-	if len(topics) == 0 {
-		return ""
-	}
-	return styles.Topic.Render("⟨" + strings.Join(topics, "⟩ ⟨") + "⟩")
-}
-
-// FormatStats formats reply and bookmark counts with sci-fi icons
-func FormatStats(replies, bookmarks int) string {
-	return styles.Stats.Render(fmt.Sprintf("◈ %d  ◆ %d", replies, bookmarks))
-}
-
-// FormatAuthor formats username and timestamp in sci-fi style
-func FormatAuthor(username string, createdAt time.Time) string {
-	return fmt.Sprintf("%s %s",
-		styles.Username.Render("@"+username),
-		styles.Timestamp.Render("· "+TimeAgo(createdAt)))
-}
-
 // CenterText centers text within a given width
 func CenterText(text string, width int) string {
 	textWidth := lipgloss.Width(text)
@@ -297,6 +235,16 @@ func CenterText(text string, width int) string {
 	return strings.Repeat(" ", padding) + text
 }
 
+// styleLines applies a lipgloss style to each line of a multi-line string.
+// This is needed because lipgloss.Render on a multi-line string only colors the first line.
+func styleLines(s string, style lipgloss.Style) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = style.Render(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // PadRight pads text to a given width
 func PadRight(text string, width int) string {
 	textWidth := lipgloss.Width(text)
@@ -304,4 +252,67 @@ func PadRight(text string, width int) string {
 		return text
 	}
 	return text + strings.Repeat(" ", width-textWidth)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMOJI REPLACEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Plain Unicode symbols to replace emojis with — matching the web app aesthetic
+var emojiReplacements = []rune{
+	// Block elements
+	'▀', '▄', '█', '▉', '▊', '▋', '▌', '▍', '▎', '▏', '▐', '░', '▒', '▓',
+	// Mathematical
+	'÷', '≠', '∑', '∏', '∫', '√', '∞', '∂', '∇', '∆', '∝', '∠',
+	// Box-drawing
+	'┼', '║', '╔', '╗', '╠', '╣', '╦', '╬',
+	// Misc symbols
+	'§', '¶', '†', '‡',
+	'♠', '♣', '♥', '♦', '◊', '○', '●', '◐', '◑',
+	'■', '□', '▲', '△', '▼', '▽', '◆', '◇',
+	'★', '☆', '✦', '✧', '✩', '✪', '✫', '✬', '✭', '✮',
+	'✱', '✲', '✳', '✴', '✵', '✶', '✷', '✸', '✹', '✺', '✻', '✼', '✽', '✾', '✿',
+	'❀', '❁', '❂', '❃', '❄', '❅', '❆', '❇', '❈', '❉', '❊', '❋',
+	'❍', '❏', '❐', '❑', '❒', '❖',
+	'❡', '❢', '❣', '❤', '❥', '❦', '❧',
+	// Geometric shapes
+	'◧', '◨', '◩', '◪', '◫', '◬', '◭', '◮', '◯',
+	'◰', '◱', '◲', '◳', '◴', '◵', '◶', '◷',
+	'◸', '◹', '◺', '◻', '◼', '◽', '◾', '◿',
+	// Braille patterns
+	'⣀', '⣤', '⣶', '⣿', '⡀', '⡤', '⡶', '⡿', '⢀', '⢤', '⢶', '⢿',
+}
+
+// isEmoji returns true if the rune is in a common emoji Unicode range.
+func isEmoji(r rune) bool {
+	return unicode.Is(unicode.So, r) && (false ||
+		(r >= 0x1F300 && r <= 0x1F9FF) || // Misc symbols, emoticons, supplemental
+		(r >= 0x1FA00 && r <= 0x1FAFF) || // Symbols extended-A
+		(r >= 0x2600 && r <= 0x26FF) || // Misc symbols
+		(r >= 0x2700 && r <= 0x27BF) || // Dingbats
+		(r >= 0x1F1E0 && r <= 0x1F1FF) || // Regional indicators (flags)
+		(r >= 0xFE00 && r <= 0xFE0F) || // Variation selectors
+		(r >= 0x200D && r <= 0x200D) || // ZWJ
+		(r >= 0xE0020 && r <= 0xE007F)) // Tags
+}
+
+// ReplaceEmojis replaces emoji characters with deterministic plain Unicode symbols.
+// Each unique emoji codepoint always maps to the same replacement, so the result
+// is stable across re-renders.
+func ReplaceEmojis(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i, r := range s {
+		if isEmoji(r) {
+			// Deterministic: hash the rune value and position to pick a stable replacement
+			idx := (int(r)*31 + i*7) % len(emojiReplacements)
+			if idx < 0 {
+				idx = -idx
+			}
+			b.WriteRune(emojiReplacements[idx])
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

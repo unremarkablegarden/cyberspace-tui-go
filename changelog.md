@@ -1,3 +1,7 @@
+## 0.3
+
+- Makeover
+
 ## 0.2 
 
 - Rewrite to use Cyberspace API instead of Firebase directly

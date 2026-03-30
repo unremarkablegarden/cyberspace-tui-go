@@ -6,10 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // DefaultBaseURL is the default Cyberspace API base URL
 const DefaultBaseURL = "https://api.cyberspace.online"
+
+const userAgent = "cyberspace-cli/0.2"
+
+// httpClient is a shared HTTP client with a reasonable timeout
+var httpClient = &http.Client{Timeout: 20 * time.Second}
 
 // AuthRequest is the request body for login
 type AuthRequest struct {
@@ -21,7 +27,6 @@ type AuthRequest struct {
 type AuthResponse struct {
 	IDToken      string `json:"idToken"`
 	RefreshToken string `json:"refreshToken"`
-	RTDBToken    string `json:"rtdbToken"`
 }
 
 // RefreshRequest is the request body for token refresh
@@ -31,8 +36,7 @@ type RefreshRequest struct {
 
 // RefreshResponse is the response from token refresh
 type RefreshResponse struct {
-	IDToken   string `json:"idToken"`
-	RTDBToken string `json:"rtdbToken"`
+	IDToken string `json:"idToken"`
 }
 
 // apiError represents an API error response
@@ -46,13 +50,13 @@ type apiErrorResponse struct {
 	Error *apiError `json:"error"`
 }
 
-// apiDataResponse wraps the data field for auth responses
+// authDataResponse wraps the data field for auth responses
 type authDataResponse struct {
 	Data json.RawMessage `json:"data"`
 }
 
 // SignIn authenticates with the Cyberspace API using email and password
-func SignIn(email, password, baseURL string) (*AuthResponse, error) {
+func (c *Client) SignIn(email, password string) (*AuthResponse, error) {
 	reqBody := AuthRequest{
 		Email:    email,
 		Password: password,
@@ -63,8 +67,15 @@ func SignIn(email, password, baseURL string) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/v1/auth/login", baseURL)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	url := fmt.Sprintf("%s/v1/auth/login", c.BaseURL)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +104,7 @@ func SignIn(email, password, baseURL string) (*AuthResponse, error) {
 }
 
 // RefreshToken exchanges a refresh token for a new ID token
-func RefreshToken(refreshToken, baseURL string) (*RefreshResponse, error) {
+func (c *Client) RefreshToken(refreshToken string) (*RefreshResponse, error) {
 	reqBody := RefreshRequest{
 		RefreshToken: refreshToken,
 	}
@@ -103,8 +114,15 @@ func RefreshToken(refreshToken, baseURL string) (*RefreshResponse, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/v1/auth/refresh", baseURL)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	url := fmt.Sprintf("%s/v1/auth/refresh", c.BaseURL)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,16 @@
+{
+  "name": "Dark",
+  "description": "Warm cream on black terminal",
+  "colors": {
+    "bright": "229",
+    "primary": "223",
+    "normal": "222",
+    "dim": "180",
+    "muted": "137",
+    "dark": "94",
+    "error": "196",
+    "bg_dark": "232",
+    "bg_select": "236",
+    "highlight": "0"
+  }
+}

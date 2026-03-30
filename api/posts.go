@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
-	"github.com/euklides/cyberspace-cli/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 )
 
 // Client handles Cyberspace API calls
@@ -25,15 +26,16 @@ func NewClient(baseURL, idToken string) *Client {
 }
 
 // doGet performs an authenticated GET request and returns the response body
-func (c *Client) doGet(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func (c *Client) doGet(reqURL string) ([]byte, error) {
+	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.IDToken))
+	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -68,11 +70,26 @@ type repliesResponse struct {
 	Cursor *string        `json:"cursor"`
 }
 
+// filterPosts removes empty-content posts (audio/image only) and extracts the cursor
+func filterPosts(resp postsResponse) ([]models.Post, string) {
+	posts := make([]models.Post, 0, len(resp.Data))
+	for _, p := range resp.Data {
+		if strings.TrimSpace(p.Content) != "" {
+			posts = append(posts, p)
+		}
+	}
+	cursor := ""
+	if resp.Cursor != nil {
+		cursor = *resp.Cursor
+	}
+	return posts, cursor
+}
+
 // FetchPosts retrieves the latest posts from the feed
 func (c *Client) FetchPosts(limit int) ([]models.Post, string, error) {
-	url := fmt.Sprintf("%s/v1/posts?limit=%d", c.BaseURL, limit)
+	reqURL := fmt.Sprintf("%s/v1/posts?limit=%d", c.BaseURL, limit)
 
-	body, err := c.doGet(url)
+	body, err := c.doGet(reqURL)
 	if err != nil {
 		return nil, "", err
 	}
@@ -82,27 +99,15 @@ func (c *Client) FetchPosts(limit int) ([]models.Post, string, error) {
 		return nil, "", err
 	}
 
-	// Filter out empty-content posts (audio/image only)
-	posts := make([]models.Post, 0, len(resp.Data))
-	for _, p := range resp.Data {
-		if strings.TrimSpace(p.Content) != "" {
-			posts = append(posts, p)
-		}
-	}
-
-	cursor := ""
-	if resp.Cursor != nil {
-		cursor = *resp.Cursor
-	}
-
+	posts, cursor := filterPosts(resp)
 	return posts, cursor, nil
 }
 
 // FetchMorePosts retrieves the next page of posts using cursor pagination
 func (c *Client) FetchMorePosts(limit int, cursor string) ([]models.Post, string, error) {
-	url := fmt.Sprintf("%s/v1/posts?limit=%d&cursor=%s", c.BaseURL, limit, cursor)
+	reqURL := fmt.Sprintf("%s/v1/posts?limit=%d&cursor=%s", c.BaseURL, limit, url.QueryEscape(cursor))
 
-	body, err := c.doGet(url)
+	body, err := c.doGet(reqURL)
 	if err != nil {
 		return nil, "", err
 	}
@@ -112,27 +117,15 @@ func (c *Client) FetchMorePosts(limit int, cursor string) ([]models.Post, string
 		return nil, "", err
 	}
 
-	// Filter out empty-content posts (audio/image only)
-	posts := make([]models.Post, 0, len(resp.Data))
-	for _, p := range resp.Data {
-		if strings.TrimSpace(p.Content) != "" {
-			posts = append(posts, p)
-		}
-	}
-
-	nextCursor := ""
-	if resp.Cursor != nil {
-		nextCursor = *resp.Cursor
-	}
-
+	posts, nextCursor := filterPosts(resp)
 	return posts, nextCursor, nil
 }
 
 // FetchPost retrieves a single post by ID
 func (c *Client) FetchPost(postID string) (*models.Post, error) {
-	url := fmt.Sprintf("%s/v1/posts/%s", c.BaseURL, postID)
+	reqURL := fmt.Sprintf("%s/v1/posts/%s", c.BaseURL, postID)
 
-	body, err := c.doGet(url)
+	body, err := c.doGet(reqURL)
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +138,62 @@ func (c *Client) FetchPost(postID string) (*models.Post, error) {
 	return &resp.Data, nil
 }
 
+// createReplyRequest is the request body for creating a reply
+type createReplyRequest struct {
+	PostID  string `json:"postId"`
+	Content string `json:"content"`
+}
+
+// createReplyResponse is the API response for creating a reply
+type createReplyResponse struct {
+	Data struct {
+		ReplyID string `json:"replyId"`
+	} `json:"data"`
+}
+
+// CreateReply posts a new reply to a post
+func (c *Client) CreateReply(postID, content string) (string, error) {
+	payload, _ := json.Marshal(createReplyRequest{
+		PostID:  postID,
+		Content: content,
+	})
+
+	req, err := http.NewRequest("POST", c.BaseURL+"/v1/replies", strings.NewReader(string(payload)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.IDToken))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return "", parseAPIError(body, "Failed to create reply")
+	}
+
+	var result createReplyResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	return result.Data.ReplyID, nil
+}
+
 // FetchReplies retrieves replies for a post
 func (c *Client) FetchReplies(postID string) ([]models.Reply, error) {
-	url := fmt.Sprintf("%s/v1/posts/%s/replies?limit=100", c.BaseURL, postID)
+	reqURL := fmt.Sprintf("%s/v1/posts/%s/replies?limit=100", c.BaseURL, postID)
 
-	body, err := c.doGet(url)
+	body, err := c.doGet(reqURL)
 	if err != nil {
 		return nil, err
 	}

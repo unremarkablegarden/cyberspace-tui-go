@@ -3,19 +3,20 @@ package views
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/euklides/cyberspace-cli/api"
-	"github.com/euklides/cyberspace-cli/styles"
+	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // LoginSuccessMsg is sent when login succeeds
 type LoginSuccessMsg struct {
 	IDToken      string
 	RefreshToken string
-	RTDBToken    string
 }
 
 // LoginErrorMsg is sent when login fails
@@ -33,6 +34,8 @@ type LoginModel struct {
 	baseURL       string
 	width         int
 	height        int
+	keys          LoginKeyMap
+	help          help.Model
 }
 
 // NewLoginModel creates a new login screen
@@ -54,11 +57,15 @@ func NewLoginModel(baseURL string) LoginModel {
 	pi.PromptStyle = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 	pi.TextStyle = lipgloss.NewStyle().Foreground(styles.ColorBright)
 
+	h := help.New()
+	h.Styles = styles.HelpStyles()
 	return LoginModel{
 		emailInput:    ei,
 		passwordInput: pi,
 		focusIndex:    0,
 		baseURL:       baseURL,
+		keys:          NewLoginKeyMap(),
+		help:          h,
 	}
 }
 
@@ -73,16 +80,14 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "ctrl+c", "esc":
-			return m, tea.Quit
-		case "tab", "down":
+		switch {
+		case key.Matches(msg, m.keys.NextField):
 			m.focusIndex = (m.focusIndex + 1) % 2
 			return m, m.updateFocus()
-		case "shift+tab", "up":
+		case key.Matches(msg, m.keys.PrevField):
 			m.focusIndex = (m.focusIndex - 1 + 2) % 2
 			return m, m.updateFocus()
-		case "enter":
+		case key.Matches(msg, m.keys.Submit):
 			if m.focusIndex == 1 || (m.emailInput.Value() != "" && m.passwordInput.Value() != "") {
 				m.loading = true
 				m.err = nil
@@ -105,6 +110,14 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LoginErrorMsg:
 		m.loading = false
 		m.err = msg.Err
+		return m, nil
+
+	case ThemeChangedMsg:
+		m.emailInput.PromptStyle = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
+		m.emailInput.TextStyle = lipgloss.NewStyle().Foreground(styles.ColorBright)
+		m.passwordInput.PromptStyle = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
+		m.passwordInput.TextStyle = lipgloss.NewStyle().Foreground(styles.ColorBright)
+		m.help.Styles = styles.HelpStyles()
 		return m, nil
 	}
 
@@ -153,9 +166,9 @@ func (m LoginModel) View() string {
 	}
 	form.WriteString(emailLabel)
 	form.WriteString("\n")
-	form.WriteString("│  ")
+	form.WriteString(styles.Normal.Render("│  "))
 	form.WriteString(m.emailInput.View())
-	form.WriteString("\n│\n")
+	form.WriteString("\n" + styles.Normal.Render("│") + "\n")
 
 	// Password field
 	passLabel := styles.Label.Render("├─ ACCESS KEY ")
@@ -164,12 +177,12 @@ func (m LoginModel) View() string {
 	}
 	form.WriteString(passLabel)
 	form.WriteString("\n")
-	form.WriteString("│  ")
+	form.WriteString(styles.Normal.Render("│  "))
 	form.WriteString(m.passwordInput.View())
-	form.WriteString("\n│\n")
+	form.WriteString("\n" + styles.Normal.Render("│") + "\n")
 
 	// Status line
-	form.WriteString("└─ STATUS: ")
+	form.WriteString(styles.Normal.Render("└─ STATUS: "))
 	if m.loading {
 		form.WriteString(styles.Warning.Render("■ AUTHENTICATING..."))
 	} else if m.err != nil {
@@ -191,8 +204,8 @@ func (m LoginModel) View() string {
 	b.WriteString("\n\n")
 
 	// Help text
-	help := styles.Dim.Render("[ TAB ] Navigate  [ ENTER ] Connect  [ ESC ] Disconnect")
-	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, help))
+	helpView := m.help.View(m.keys)
+	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, helpView))
 	b.WriteString("\n\n")
 
 	// Bottom scan line
@@ -246,7 +259,8 @@ func (m *LoginModel) updateFocus() tea.Cmd {
 
 func (m LoginModel) attemptLogin() tea.Cmd {
 	return func() tea.Msg {
-		resp, err := api.SignIn(m.emailInput.Value(), m.passwordInput.Value(), m.baseURL)
+		client := api.NewClient(m.baseURL, "")
+		resp, err := client.SignIn(m.emailInput.Value(), m.passwordInput.Value())
 		if err != nil {
 			return LoginErrorMsg{Err: err}
 		}
@@ -254,7 +268,6 @@ func (m LoginModel) attemptLogin() tea.Cmd {
 		return LoginSuccessMsg{
 			IDToken:      resp.IDToken,
 			RefreshToken: resp.RefreshToken,
-			RTDBToken:    resp.RTDBToken,
 		}
 	}
 }

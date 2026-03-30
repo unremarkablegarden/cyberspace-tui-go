@@ -4,14 +4,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/euklides/cyberspace-cli/api"
-	"github.com/euklides/cyberspace-cli/models"
-	"github.com/euklides/cyberspace-cli/styles"
+	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
+
+const headerHeight = 2 // title bar + blank line
+const footerHeight = 2 // divider + status line
 
 // PostDetailLoadedMsg is sent when post and replies are loaded
 type PostDetailLoadedMsg struct {
@@ -27,39 +34,99 @@ type PostDetailErrorMsg struct {
 // BackToFeedMsg is sent when user wants to go back
 type BackToFeedMsg struct{}
 
+// ReplyCreatedMsg is sent when a reply is successfully created
+type ReplyCreatedMsg struct{ ReplyID string }
+
+// ReplyErrorMsg is sent when creating a reply fails
+type ReplyErrorMsg struct{ Err error }
+
+const composeHeight = 6 // textarea height including border
+
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
-	post    models.Post
-	replies []models.Reply
-	scroll  int
-	loading bool
-	spinner spinner.Model
-	err     error
-	client  *api.Client
-	postID  string
-	width   int
-	height  int
+	post         models.Post
+	replies      []models.Reply
+	loading      bool
+	spinner      spinner.Model
+	err          error
+	client       *api.Client
+	postID       string
+	width        int
+	height       int
+	keys     PostDetailKeyMap
+	help     help.Model
+	viewport viewport.Model
+	ready        bool // true once we've received a WindowSizeMsg
+	replyInput   textarea.Model
+	composing    bool
+	replySending bool
+	replyErr     error
+}
+
+func newReplyTextarea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Type your reply..."
+	ta.SetHeight(3)
+	ta.SetWidth(60)
+	ta.CharLimit = 32768
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(styles.ColorBgSelect)
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(styles.ColorNormal)
+	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	ta.FocusedStyle.EndOfBuffer = lipgloss.NewStyle().Foreground(styles.ColorDark)
+	ta.BlurredStyle = ta.FocusedStyle
+	ta.Blur()
+	return ta
+}
+
+func newDetailViewport() viewport.Model {
+	vp := viewport.New(0, 0)
+	vp.MouseWheelEnabled = true
+	// Override default keymap: remove 'b' from PageUp (we use it for "back")
+	km := viewport.DefaultKeyMap()
+	km.PageUp = key.NewBinding(key.WithKeys("pgup"))
+	km.PageDown = key.NewBinding(key.WithKeys("f", "pgdown", " "))
+	km.HalfPageUp = key.NewBinding(key.WithKeys("u", "ctrl+u"))
+	km.HalfPageDown = key.NewBinding(key.WithKeys("d", "ctrl+d"))
+	vp.KeyMap = km
+	return vp
 }
 
 // NewPostDetailModel creates a new post detail screen
 func NewPostDetailModel(baseURL, idToken, postID string) PostDetailModel {
+	h := help.New()
+	h.Styles = styles.HelpStyles()
 	return PostDetailModel{
-		client:  api.NewClient(baseURL, idToken),
-		postID:  postID,
-		spinner: NewSpinner(),
-		loading: true,
+		client:     api.NewClient(baseURL, idToken),
+		postID:     postID,
+		spinner:    NewSpinner(),
+		loading:    true,
+		keys:       NewPostDetailKeyMap(),
+		help:       h,
+		viewport:   newDetailViewport(),
+		replyInput: newReplyTextarea(),
 	}
 }
 
 // NewPostDetailModelWithPost creates a detail screen with post already loaded
 func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post) PostDetailModel {
-	return PostDetailModel{
-		client:  api.NewClient(baseURL, idToken),
-		postID:  post.ID,
-		post:    post,
-		spinner: NewSpinner(),
-		loading: true,
+	h := help.New()
+	h.Styles = styles.HelpStyles()
+	vp := newDetailViewport()
+	m := PostDetailModel{
+		client:     api.NewClient(baseURL, idToken),
+		postID:     post.ID,
+		post:       post,
+		spinner:    NewSpinner(),
+		loading:    true,
+		keys:       NewPostDetailKeyMap(),
+		help:       h,
+		viewport:   vp,
+		replyInput: newReplyTextarea(),
 	}
+	// Pre-populate viewport so post shows immediately while replies load
+	w, _ := SafeDimensions(0, 0)
+	m.viewport.SetContent(m.buildContent(w))
+	return m
 }
 
 func (m PostDetailModel) Init() tea.Cmd {
@@ -67,50 +134,133 @@ func (m PostDetailModel) Init() tea.Cmd {
 }
 
 func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		// If composing, route keys to textarea
+		if m.composing {
+			switch {
+			case key.Matches(msg, m.keys.Send):
+				// Send reply
+				content := strings.TrimSpace(m.replyInput.Value())
+				if content != "" && !m.replySending {
+					m.replySending = true
+					m.replyErr = nil
+					return m, m.sendReply(content)
+				}
+				return m, nil
+			case msg.String() == "esc":
+				// Exit compose mode
+				m.composing = false
+				m.replyInput.Blur()
+				m.resizeViewport()
+				return m, nil
+			default:
+				// Forward to textarea
+				var cmd tea.Cmd
+				m.replyInput, cmd = m.replyInput.Update(msg)
+				return m, cmd
+			}
+		}
+
+		// Normal (non-compose) key handling
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case "esc", "b", "backspace":
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+		case key.Matches(msg, m.keys.Back):
 			return m, func() tea.Msg { return BackToFeedMsg{} }
-		case "j", "down":
-			m.scroll++
-			m.clampScroll()
-		case "k", "up":
-			m.scroll--
-			m.clampScroll()
-		case "g":
-			m.scroll = 0
-		case "G":
-			m.scroll = m.maxScroll()
-		case "r":
+		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
+		case key.Matches(msg, m.keys.Reply):
+			m.composing = true
+			m.replyErr = nil
+			m.replyInput.SetWidth(m.width - 6)
+			m.replyInput.Focus()
+			m.resizeViewport()
+			return m, m.replyInput.Focus()
 		}
+		// Everything else (j/k, g/G, pgup/pgdn, etc.) falls through to viewport
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.clampScroll()
+		vpHeight := msg.Height - headerHeight - footerHeight
+		if vpHeight < 1 {
+			vpHeight = 1
+		}
+		m.viewport.Width = msg.Width
+		m.viewport.Height = vpHeight
+		if !m.ready {
+			m.ready = true
+		}
+		// Rebuild content at new width if we have data
+		if m.post.ID != "" {
+			m.viewport.SetContent(m.buildContent(msg.Width))
+		}
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+		// Rebuild viewport content while loading so spinner animates
+		if m.loading && m.post.ID != "" {
+			w, _ := SafeDimensions(m.width, m.height)
+			m.viewport.SetContent(m.buildContent(w))
+		}
 		return m, cmd
 
 	case PostDetailLoadedMsg:
 		m.loading = false
 		m.post = msg.Post
 		m.replies = msg.Replies
+		w, _ := SafeDimensions(m.width, m.height)
+		m.viewport.SetContent(m.buildContent(w))
+		m.viewport.GotoTop()
 
 	case PostDetailErrorMsg:
 		m.loading = false
 		m.err = msg.Err
+
+	case ReplyCreatedMsg:
+		m.replySending = false
+		m.composing = false
+		m.replyInput.Reset()
+		m.replyInput.Blur()
+		m.resizeViewport()
+		// Re-fetch to show the new reply
+		m.loading = true
+		return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
+
+	case ReplyErrorMsg:
+		m.replySending = false
+		m.replyErr = msg.Err
+
+	case ThemeChangedMsg:
+		m.spinner.Style = styles.Spinner
+		m.help.Styles = styles.HelpStyles()
+		m.replyInput.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(styles.ColorBgSelect)
+		m.replyInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(styles.ColorNormal)
+		m.replyInput.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
+		m.replyInput.BlurredStyle = m.replyInput.FocusedStyle
+		// Rebuild content with new theme colors
+		if m.post.ID != "" {
+			w, _ := SafeDimensions(m.width, m.height)
+			m.viewport.SetContent(m.buildContent(w))
+		}
+
 	}
 
-	return m, nil
+	// Forward to viewport for scroll handling
+	var vpCmd tea.Cmd
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	cmds = append(cmds, vpCmd)
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m PostDetailModel) View() string {
@@ -129,40 +279,27 @@ func (m PostDetailModel) View() string {
 	// Header
 	b.WriteString(m.renderHeader(w))
 
-	// Build content
-	content := m.buildContent(w)
-	lines := strings.Split(content, "\n")
+	// Viewport content
+	b.WriteString(m.viewport.View())
+	b.WriteString("\n")
 
-	// Apply scroll
-	visibleLines := h - 5 // header + footer
-	start := m.scroll
-	end := Min(start+visibleLines, len(lines))
-
-	for i := start; i < end && i < len(lines); i++ {
-		b.WriteString(lines[i])
+	// Compose area (if active)
+	if m.composing {
+		b.WriteString(m.renderComposeArea(w))
 		b.WriteString("\n")
 	}
 
-	// Calculate padding needed
-	renderedLines := end - start
-	paddingNeeded := visibleLines - renderedLines
-	for i := 0; i < paddingNeeded; i++ {
-		b.WriteString("\n")
-	}
-
-	// Footer with scroll indicator
-	b.WriteString(m.renderFooter(w, start+1, end, len(lines)))
+	// Footer
+	b.WriteString(m.renderFooter(w))
 
 	return b.String()
 }
 
 func (m PostDetailModel) renderHeader(width int) string {
-	// Title centered with yellow bar across full width
 	title := "▓▒░ ENTRY VIEWER ░▒▓"
 	titleRendered := styles.Title.Render(title)
 	titleWidth := lipgloss.Width(titleRendered)
 
-	// Calculate bar widths for centering
 	barWidth := (width - titleWidth) / 2
 	if barWidth < 0 {
 		barWidth = 0
@@ -172,7 +309,6 @@ func (m PostDetailModel) renderHeader(width int) string {
 		rightBarWidth = 0
 	}
 
-	// Yellow bar on left + centered title + yellow bar on right
 	barStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	leftBar := barStyle.Render(strings.Repeat("█", barWidth))
 	rightBar := barStyle.Render(strings.Repeat("█", rightBarWidth))
@@ -180,39 +316,92 @@ func (m PostDetailModel) renderHeader(width int) string {
 	return leftBar + titleRendered + rightBar + "\n\n"
 }
 
-func (m PostDetailModel) renderFooter(width, start, end, total int) string {
-	var b strings.Builder
-
-	// Simple divider
-	b.WriteString(styles.Divider(width))
-	b.WriteString("\n")
-
-	// Scroll position on left
-	scrollInfo := styles.StatusBarSegment("LINE", fmt.Sprintf("%d-%d/%d", start, end, total))
-
-	// Navigation hints on right
-	navHint := styles.Dim.Render("[j/k] Scroll  [g/G] Top/Bottom  [r] Refresh  [ESC] Back")
-
-	scrollWidth := lipgloss.Width(scrollInfo)
+func (m PostDetailModel) renderFooter(width int) string {
+	navHint := m.help.View(m.keys)
 	navWidth := lipgloss.Width(navHint)
-	spacing := width - scrollWidth - navWidth
-	if spacing < 1 {
-		spacing = 1
+
+	// Divider fills the left, help sits on the right — same line
+	dividerWidth := width - navWidth - 1
+	if dividerWidth < 1 {
+		dividerWidth = 1
+	}
+	return styles.Divider(dividerWidth) + " " + navHint
+}
+
+func (m PostDetailModel) renderComposeArea(width int) string {
+	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
+	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
+
+	title := "COMPOSE REPLY"
+	if m.replySending {
+		title = "SENDING..."
 	}
 
-	b.WriteString(scrollInfo)
-	b.WriteString(strings.Repeat(" ", spacing))
-	b.WriteString(navHint)
+	innerWidth := width - 4
+	if innerWidth < 20 {
+		innerWidth = 60
+	}
 
-	return b.String()
+	dashesLen := innerWidth - len(title) - 4
+	if dashesLen < 1 {
+		dashesLen = 1
+	}
+
+	top := borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", dashesLen)+"╮")
+	bottom := borderStyle.Render("╰" + strings.Repeat("─", innerWidth+2) + "╯")
+
+	var mid strings.Builder
+	if m.replyErr != nil {
+		mid.WriteString(borderStyle.Render("│ "))
+		mid.WriteString(styles.Error.Render("Error: " + m.replyErr.Error()))
+		mid.WriteString("\n")
+	}
+	mid.WriteString(borderStyle.Render("│ "))
+	// Render textarea lines within box
+	taView := m.replyInput.View()
+	taLines := strings.Split(taView, "\n")
+	for i, line := range taLines {
+		if i > 0 {
+			mid.WriteString(borderStyle.Render("│ "))
+		}
+		mid.WriteString(line)
+		if i < len(taLines)-1 {
+			mid.WriteString("\n")
+		}
+	}
+	mid.WriteString("\n")
+	mid.WriteString(borderStyle.Render("│ "))
+	mid.WriteString(styles.Dim.Render("[ctrl+s] send  [esc] cancel"))
+	mid.WriteString("\n")
+
+	return top + "\n" + mid.String() + bottom
+}
+
+func (m *PostDetailModel) resizeViewport() {
+	vpHeight := m.height - headerHeight - footerHeight
+	if m.composing {
+		vpHeight -= composeHeight
+	}
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	m.viewport.Height = vpHeight
+}
+
+func (m PostDetailModel) sendReply(content string) tea.Cmd {
+	return func() tea.Msg {
+		replyID, err := m.client.CreateReply(m.postID, content)
+		if err != nil {
+			return ReplyErrorMsg{Err: err}
+		}
+		return ReplyCreatedMsg{ReplyID: replyID}
+	}
 }
 
 func (m PostDetailModel) renderLoadingScreen(width, height int) string {
 	loadingBox := styles.DataBox("DECRYPTING TRANSMISSION",
 		"\n"+
-			"  "+m.spinner.View()+" Accessing secured data...\n"+
-			"\n"+
-			"  "+styles.ProgressBarSimple(0.5, 30)+"\n"+
+			"  "+m.spinner.View()+styles.Normal.Render(" Accessing secured data...")+"\n"+
 			"\n"+
 			"  "+styles.Dim.Render("Decoding neural patterns...")+"\n",
 		50)
@@ -236,13 +425,13 @@ func (m PostDetailModel) buildContent(width int) string {
 		contentWidth = 78
 	}
 
-	// Metadata box (narrower - about 50 chars)
+	// Metadata box
 	metaWidth := 50
-	metaContent := fmt.Sprintf("@%s\n%s", m.post.AuthorUsername, TimeAgo(m.post.CreatedAt))
+	metaContent := styles.Username.Render("@"+m.post.AuthorUsername) + "\n" + styles.Dim.Render(TimeAgo(m.post.CreatedAt))
 	b.WriteString(renderBox("POST INFO", metaContent, metaWidth))
 	b.WriteString("\n\n")
 
-	// Message content box (full width with vertical lines) - strip markdown but keep link text
+	// Message content box
 	cleanContent := StripMarkdownKeepNewlines(m.post.Content)
 	b.WriteString(renderBox("MESSAGE", cleanContent, contentWidth))
 	b.WriteString("\n\n")
@@ -271,11 +460,10 @@ func (m PostDetailModel) buildContent(width int) string {
 
 	// Replies section
 	if m.loading {
-		b.WriteString(m.spinner.View() + " Loading replies...")
+		b.WriteString(m.spinner.View() + styles.Normal.Render(" Loading replies..."))
 	} else if len(m.replies) == 0 {
 		b.WriteString(renderBox("REPLIES", "No replies yet", 40))
 	} else {
-		// Build replies content
 		var repliesContent strings.Builder
 		for i, reply := range m.replies {
 			repliesContent.WriteString(styles.Username.Render("@" + reply.AuthorUsername))
@@ -298,39 +486,38 @@ func renderBox(title, content string, width int) string {
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorDim)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
 
-	innerWidth := width - 4 // Account for "│ " and " │"
+	innerWidth := width - 4
 	if innerWidth < 10 {
 		innerWidth = 10
 	}
 
-	// Top border with title: ┌─ TITLE ─────────────────┐
-	// Structure: ┌ (1) + ─ (1) + space (1) + title + space (1) + dashes + ┐ (1)
 	titleRendered := titleStyle.Render(title)
 	titleVisualLen := lipgloss.Width(title)
-	remainingDashes := width - 5 - titleVisualLen // 5 = ┌ + ─ + space + space + ┐
+	remainingDashes := width - 5 - titleVisualLen
 	if remainingDashes < 1 {
 		remainingDashes = 1
 	}
-	top := borderStyle.Render("┌─ ") + titleRendered + borderStyle.Render(" "+strings.Repeat("─", remainingDashes)+"┐")
+	top := borderStyle.Render("╭─ ") + titleRendered + borderStyle.Render(" "+strings.Repeat("─", remainingDashes)+"╮")
 
-	// Bottom border
-	bottom := borderStyle.Render("└" + strings.Repeat("─", width-2) + "┘")
+	bottom := borderStyle.Render("╰" + strings.Repeat("─", width-2) + "╯")
 
-	// Wrap content - split by newlines and wrap each line
+	contentStyle := lipgloss.NewStyle().Foreground(styles.ColorNormal)
+
 	var middle strings.Builder
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
-		// Wrap long lines
 		wrappedLines := wrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
-			lineWidth := lipgloss.Width(wl)
+			// Apply theme foreground to each line
+			styled := contentStyle.Render(wl)
+			lineWidth := lipgloss.Width(styled)
 			padding := innerWidth - lineWidth
 			if padding < 0 {
 				padding = 0
 			}
 			middle.WriteString(borderStyle.Render("│"))
 			middle.WriteString(" ")
-			middle.WriteString(wl)
+			middle.WriteString(styled)
 			middle.WriteString(strings.Repeat(" ", padding))
 			middle.WriteString(" ")
 			middle.WriteString(borderStyle.Render("│"))
@@ -341,7 +528,7 @@ func renderBox(title, content string, width int) string {
 	return top + "\n" + middle.String() + bottom
 }
 
-// wrapText wraps text to fit within width
+// wrapText wraps text to fit within a visual width
 func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
@@ -354,40 +541,21 @@ func wrapText(text string, width int) []string {
 	}
 
 	currentLine := words[0]
+	currentWidth := lipgloss.Width(currentLine)
 	for _, word := range words[1:] {
-		if len(currentLine)+1+len(word) <= width {
+		wordWidth := lipgloss.Width(word)
+		if currentWidth+1+wordWidth <= width {
 			currentLine += " " + word
+			currentWidth += 1 + wordWidth
 		} else {
 			lines = append(lines, currentLine)
 			currentLine = word
+			currentWidth = wordWidth
 		}
 	}
 	lines = append(lines, currentLine)
 
 	return lines
-}
-
-func (m PostDetailModel) renderReply(r models.Reply, width int) string {
-	var b strings.Builder
-
-	// Reply header
-	header := fmt.Sprintf("  %s %s",
-		styles.Username.Render("@"+r.AuthorUsername),
-		styles.Timestamp.Render("· "+TimeAgo(r.CreatedAt)),
-	)
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	// Reply content
-	contentStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorContent).
-		Width(width).
-		PaddingLeft(4)
-
-	b.WriteString(contentStyle.Render(r.Content))
-	b.WriteString("\n")
-
-	return b.String()
 }
 
 func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
@@ -410,28 +578,15 @@ func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
 	}
 }
 
-func (m *PostDetailModel) clampScroll() {
-	m.scroll = Clamp(m.scroll, 0, m.maxScroll())
-}
-
 // SetSize updates the view dimensions
 func (m *PostDetailModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-}
-
-func (m PostDetailModel) maxScroll() int {
-	w, _ := SafeDimensions(m.width, m.height)
-	content := m.buildContent(w)
-	lines := strings.Split(content, "\n")
-	height := m.height
-	if height < 10 {
-		height = 24
+	vpHeight := height - headerHeight - footerHeight
+	if vpHeight < 1 {
+		vpHeight = 1
 	}
-	visibleLines := height - 5
-	maxScroll := len(lines) - visibleLines
-	if maxScroll < 0 {
-		return 0
-	}
-	return maxScroll
+	m.viewport.Width = width
+	m.viewport.Height = vpHeight
+	m.ready = true
 }

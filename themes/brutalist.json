@@ -1,0 +1,16 @@
+{
+  "name": "Brutalist",
+  "description": "Cold steel blue terminal",
+  "colors": {
+    "bright": "189",
+    "primary": "153",
+    "normal": "146",
+    "dim": "103",
+    "muted": "60",
+    "dark": "60",
+    "error": "196",
+    "bg_dark": "233",
+    "bg_select": "17",
+    "highlight": "0"
+  }
+}

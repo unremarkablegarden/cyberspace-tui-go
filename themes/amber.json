@@ -1,0 +1,16 @@
+{
+  "name": "VT320",
+  "description": "Classic 80s amber CRT terminal",
+  "colors": {
+    "bright": "220",
+    "primary": "214",
+    "normal": "178",
+    "dim": "172",
+    "muted": "136",
+    "dark": "94",
+    "error": "166",
+    "bg_dark": "232",
+    "bg_select": "52",
+    "highlight": "0"
+  }
+}

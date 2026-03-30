@@ -1,0 +1,16 @@
+{
+  "name": "Matrix",
+  "description": "Green-on-black hacker terminal",
+  "colors": {
+    "bright": "118",
+    "primary": "113",
+    "normal": "70",
+    "dim": "34",
+    "muted": "28",
+    "dark": "22",
+    "error": "160",
+    "bg_dark": "232",
+    "bg_select": "22",
+    "highlight": "0"
+  }
+}
