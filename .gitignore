@@ -1,0 +1,45 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Test binary
+*.test
+
+# Go build cache
+*.out
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Firebase
+firebase.json
+firestore.rules
+firestore.indexes.json
+storage.rules
+.firebaserc
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+*-firebase-adminsdk-*.json
+serviceAccountKey*.json
+*credentials*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude
+.claude/
