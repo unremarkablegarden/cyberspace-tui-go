@@ -38,6 +38,18 @@ type OpenPostMsg struct {
 	Post models.Post
 }
 
+// OpenComposeMsg is sent when the user wants to create a new post
+type OpenComposeMsg struct{}
+
+// RefreshFeedMsg triggers a feed reload
+type RefreshFeedMsg struct{}
+
+// OpenBookmarksMsg is sent when the user wants to view bookmarks
+type OpenBookmarksMsg struct{}
+
+// OpenNotificationsMsg is sent when the user wants to view notifications
+type OpenNotificationsMsg struct{}
+
 // LogoutMsg is sent when the user wants to log out
 type LogoutMsg struct{}
 
@@ -120,6 +132,19 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
 		case key.Matches(msg, m.keys.Logout):
 			return m, func() tea.Msg { return LogoutMsg{} }
+		case key.Matches(msg, m.keys.NewPost):
+			return m, func() tea.Msg { return OpenComposeMsg{} }
+		case key.Matches(msg, m.keys.Bookmarks):
+			return m, func() tea.Msg { return OpenBookmarksMsg{} }
+		case key.Matches(msg, m.keys.Notifications):
+			return m, func() tea.Msg { return OpenNotificationsMsg{} }
+		case key.Matches(msg, m.keys.Topics):
+			return m, func() tea.Msg { return OpenTopicsMsg{} }
+		case key.Matches(msg, m.keys.Profile):
+			if item, ok := m.list.SelectedItem().(PostItem); ok {
+				username := item.Post.AuthorUsername
+				return m, func() tea.Msg { return OpenProfileMsg{Username: username} }
+			}
 		case key.Matches(msg, m.keys.Open):
 			if item := m.list.SelectedItem(); item != nil {
 				switch it := item.(type) {
@@ -135,6 +160,11 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+
+	case RefreshFeedMsg:
+		m.loading = true
+		m.err = nil
+		return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
 
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionRelease && !m.loading {

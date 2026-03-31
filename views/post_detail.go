@@ -40,6 +40,12 @@ type ReplyCreatedMsg struct{ ReplyID string }
 // ReplyErrorMsg is sent when creating a reply fails
 type ReplyErrorMsg struct{ Err error }
 
+// BookmarkAddedMsg is sent when a post is successfully bookmarked
+type BookmarkAddedMsg struct{ BookmarkID string }
+
+// BookmarkAddErrorMsg is sent when bookmarking a post fails
+type BookmarkAddErrorMsg struct{ Err error }
+
 const composeHeight = 6 // textarea height including border
 
 // PostDetailModel is the post detail screen
@@ -61,6 +67,9 @@ type PostDetailModel struct {
 	composing    bool
 	replySending bool
 	replyErr     error
+	bookmarking  bool
+	bookmarked   bool
+	bookmarkErr  error
 }
 
 func newReplyTextarea() textarea.Model {
@@ -184,6 +193,15 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.replyInput.Focus()
 			m.resizeViewport()
 			return m, m.replyInput.Focus()
+		case key.Matches(msg, m.keys.Save):
+			if !m.bookmarking && !m.bookmarked {
+				m.bookmarking = true
+				m.bookmarkErr = nil
+				return m, m.addBookmark()
+			}
+		case key.Matches(msg, m.keys.Profile):
+			username := m.post.AuthorUsername
+			return m, func() tea.Msg { return OpenProfileMsg{Username: username} }
 		}
 		// Everything else (j/k, g/G, pgup/pgdn, etc.) falls through to viewport
 
@@ -239,6 +257,17 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ReplyErrorMsg:
 		m.replySending = false
 		m.replyErr = msg.Err
+
+	case BookmarkAddedMsg:
+		m.bookmarking = false
+		m.bookmarked = true
+		m.post.BookmarksCount++
+		w, _ := SafeDimensions(m.width, m.height)
+		m.viewport.SetContent(m.buildContent(w))
+
+	case BookmarkAddErrorMsg:
+		m.bookmarking = false
+		m.bookmarkErr = msg.Err
 
 	case ThemeChangedMsg:
 		m.spinner.Style = styles.Spinner
@@ -303,12 +332,21 @@ func (m PostDetailModel) renderFooter(width int) string {
 	navHint := m.help.View(m.keys)
 	navWidth := lipgloss.Width(navHint)
 
-	// Divider fills the left, help sits on the right — same line
-	dividerWidth := width - navWidth - 1
+	var status string
+	if m.bookmarking {
+		status = styles.Dim.Render(" [saving...]")
+	} else if m.bookmarked {
+		status = styles.Normal.Render(" [■ saved]")
+	} else if m.bookmarkErr != nil {
+		status = styles.Error.Render(" [save failed: " + m.bookmarkErr.Error() + "]")
+	}
+	statusWidth := lipgloss.Width(status)
+
+	dividerWidth := width - navWidth - statusWidth - 1
 	if dividerWidth < 1 {
 		dividerWidth = 1
 	}
-	return styles.Divider(dividerWidth) + " " + navHint
+	return styles.Divider(dividerWidth) + status + " " + navHint
 }
 
 func (m PostDetailModel) renderComposeArea(width int) string {
@@ -369,6 +407,16 @@ func (m *PostDetailModel) resizeViewport() {
 		vpHeight = 1
 	}
 	m.viewport.Height = vpHeight
+}
+
+func (m PostDetailModel) addBookmark() tea.Cmd {
+	return func() tea.Msg {
+		id, err := m.client.CreateBookmark(m.postID)
+		if err != nil {
+			return BookmarkAddErrorMsg{Err: err}
+		}
+		return BookmarkAddedMsg{BookmarkID: id}
+	}
 }
 
 func (m PostDetailModel) sendReply(content string) tea.Cmd {
@@ -530,6 +578,9 @@ func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
 		return PostDetailLoadedMsg{Post: post, Replies: replies}
 	}
 }
+
+// Composing returns true when the reply textarea is active
+func (m PostDetailModel) Composing() bool { return m.composing }
 
 // SetSize updates the view dimensions
 func (m *PostDetailModel) SetSize(width, height int) {

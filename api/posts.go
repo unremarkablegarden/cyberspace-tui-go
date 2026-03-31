@@ -138,6 +138,39 @@ func (c *Client) FetchPost(postID string) (*models.Post, error) {
 	return &resp.Data, nil
 }
 
+// createPostRequest is the request body for creating a post
+type createPostRequest struct {
+	Content  string   `json:"content"`
+	Topics   []string `json:"topics,omitempty"`
+	IsPublic bool     `json:"isPublic"`
+	IsNSFW   bool     `json:"isNSFW"`
+}
+
+// createPostResponse is the API response for creating a post
+type createPostResponse struct {
+	Data struct {
+		PostID string `json:"postId"`
+	} `json:"data"`
+}
+
+// CreatePost creates a new post
+func (c *Client) CreatePost(content string, topics []string) (string, error) {
+	body, err := c.doPost(c.BaseURL+"/v1/posts", createPostRequest{
+		Content: content,
+		Topics:  topics,
+	}, "failed to create post")
+	if err != nil {
+		return "", err
+	}
+
+	var result createPostResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	return result.Data.PostID, nil
+}
+
 // createReplyRequest is the request body for creating a reply
 type createReplyRequest struct {
 	PostID  string `json:"postId"`
