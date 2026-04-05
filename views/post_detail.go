@@ -48,28 +48,38 @@ type BookmarkAddErrorMsg struct{ Err error }
 
 const composeHeight = 6 // textarea height including border
 
+// postDeletedMsg is sent internally when a delete succeeds
+type postDeletedMsg struct{}
+
+// postDeleteErrMsg is sent internally when a delete fails
+type postDeleteErrMsg struct{ Err error }
+
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
-	post         models.Post
-	replies      []models.Reply
-	loading      bool
-	spinner      spinner.Model
-	err          error
-	client       *api.Client
-	postID       string
-	width        int
-	height       int
-	keys     PostDetailKeyMap
-	help     help.Model
-	viewport viewport.Model
-	ready        bool // true once we've received a WindowSizeMsg
-	replyInput   textarea.Model
-	composing    bool
-	replySending bool
-	replyErr     error
-	bookmarking  bool
-	bookmarked   bool
-	bookmarkErr  error
+	post            models.Post
+	replies         []models.Reply
+	loading         bool
+	spinner         spinner.Model
+	err             error
+	client          *api.Client
+	postID          string
+	currentUsername string
+	width           int
+	height          int
+	keys            PostDetailKeyMap
+	help            help.Model
+	viewport        viewport.Model
+	ready           bool // true once we've received a WindowSizeMsg
+	replyInput      textarea.Model
+	composing       bool
+	replySending    bool
+	replyErr        error
+	bookmarking     bool
+	bookmarked      bool
+	bookmarkErr     error
+	confirmingDelete bool
+	deleting        bool
+	deleteErr       error
 }
 
 func newReplyTextarea() textarea.Model {
@@ -101,36 +111,38 @@ func newDetailViewport() viewport.Model {
 }
 
 // NewPostDetailModel creates a new post detail screen
-func NewPostDetailModel(baseURL, idToken, postID string) PostDetailModel {
+func NewPostDetailModel(baseURL, idToken, postID, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	return PostDetailModel{
-		client:     api.NewClient(baseURL, idToken),
-		postID:     postID,
-		spinner:    NewSpinner(),
-		loading:    true,
-		keys:       NewPostDetailKeyMap(),
-		help:       h,
-		viewport:   newDetailViewport(),
-		replyInput: newReplyTextarea(),
+		client:          api.NewClient(baseURL, idToken),
+		postID:          postID,
+		currentUsername: currentUsername,
+		spinner:         NewSpinner(),
+		loading:         true,
+		keys:            NewPostDetailKeyMap(),
+		help:            h,
+		viewport:        newDetailViewport(),
+		replyInput:      newReplyTextarea(),
 	}
 }
 
 // NewPostDetailModelWithPost creates a detail screen with post already loaded
-func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post) PostDetailModel {
+func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
 	m := PostDetailModel{
-		client:     api.NewClient(baseURL, idToken),
-		postID:     post.ID,
-		post:       post,
-		spinner:    NewSpinner(),
-		loading:    true,
-		keys:       NewPostDetailKeyMap(),
-		help:       h,
-		viewport:   vp,
-		replyInput: newReplyTextarea(),
+		client:          api.NewClient(baseURL, idToken),
+		postID:          post.ID,
+		post:            post,
+		currentUsername: currentUsername,
+		spinner:         NewSpinner(),
+		loading:         true,
+		keys:            NewPostDetailKeyMap(),
+		help:            h,
+		viewport:        vp,
+		replyInput:      newReplyTextarea(),
 	}
 	// Pre-populate viewport so post shows immediately while replies load
 	w, _ := SafeDimensions(0, 0)
@@ -173,6 +185,21 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Confirm delete prompt
+		if m.confirmingDelete {
+			switch msg.String() {
+			case "y", "Y":
+				m.confirmingDelete = false
+				m.deleting = true
+				m.deleteErr = nil
+				return m, tea.Batch(m.spinner.Tick, m.deletePost())
+			case "n", "N", "esc":
+				m.confirmingDelete = false
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Normal (non-compose) key handling
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -182,6 +209,11 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
 			return m, func() tea.Msg { return BackToFeedMsg{} }
+		case key.Matches(msg, m.keys.Delete):
+			if !m.deleting && m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
+				m.confirmingDelete = true
+				return m, nil
+			}
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -269,6 +301,13 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bookmarking = false
 		m.bookmarkErr = msg.Err
 
+	case postDeletedMsg:
+		return m, func() tea.Msg { return BackToFeedMsg{} }
+
+	case postDeleteErrMsg:
+		m.deleting = false
+		m.deleteErr = msg.Err
+
 	case ThemeChangedMsg:
 		m.spinner.Style = styles.Spinner
 		m.help.Styles = styles.HelpStyles()
@@ -333,7 +372,13 @@ func (m PostDetailModel) renderFooter(width int) string {
 	navWidth := lipgloss.Width(navHint)
 
 	var status string
-	if m.bookmarking {
+	if m.confirmingDelete {
+		status = styles.Error.Render(" [delete post? y/n]")
+	} else if m.deleting {
+		status = styles.Dim.Render(" [deleting...]")
+	} else if m.deleteErr != nil {
+		status = styles.Error.Render(" [delete failed: " + m.deleteErr.Error() + "]")
+	} else if m.bookmarking {
 		status = styles.Dim.Render(" [saving...]")
 	} else if m.bookmarked {
 		status = styles.Normal.Render(" [■ saved]")
@@ -407,6 +452,15 @@ func (m *PostDetailModel) resizeViewport() {
 		vpHeight = 1
 	}
 	m.viewport.Height = vpHeight
+}
+
+func (m PostDetailModel) deletePost() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.DeletePost(m.postID); err != nil {
+			return postDeleteErrMsg{Err: err}
+		}
+		return postDeletedMsg{}
+	}
 }
 
 func (m PostDetailModel) addBookmark() tea.Cmd {

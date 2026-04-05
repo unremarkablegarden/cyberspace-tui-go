@@ -140,6 +140,8 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return OpenNotificationsMsg{} }
 		case key.Matches(msg, m.keys.Topics):
 			return m, func() tea.Msg { return OpenTopicsMsg{} }
+		case key.Matches(msg, m.keys.Notes):
+			return m, func() tea.Msg { return OpenNotesMsg{} }
 		case key.Matches(msg, m.keys.Profile):
 			if item, ok := m.list.SelectedItem().(PostItem); ok {
 				username := item.Post.AuthorUsername

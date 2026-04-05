@@ -22,6 +22,7 @@ type FeedKeyMap struct {
 	Bookmarks     key.Binding
 	Notifications key.Binding
 	Topics        key.Binding
+	Notes         key.Binding
 	Profile       key.Binding
 	Help          key.Binding
 	Quit          key.Binding
@@ -82,6 +83,10 @@ func NewFeedKeyMap() FeedKeyMap {
 			key.WithKeys("p"),
 			key.WithHelp("p", "profile"),
 		),
+		Notes: key.NewBinding(
+			key.WithKeys("M"),
+			key.WithHelp("M", "notes"),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -102,7 +107,7 @@ func (k FeedKeyMap) ShortHelp() []key.Binding {
 func (k FeedKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Top, k.Bottom},
-		{k.Open, k.NewPost, k.Topics, k.Bookmarks, k.Notifications, k.Refresh},
+		{k.Open, k.NewPost, k.Topics, k.Bookmarks, k.Notifications, k.Notes, k.Refresh},
 		{k.Profile, k.Theme, k.Logout, k.Help, k.Quit},
 	}
 }
@@ -126,6 +131,7 @@ type PostDetailKeyMap struct {
 	Reply   key.Binding
 	Send    key.Binding
 	Save    key.Binding
+	Delete  key.Binding
 	Profile key.Binding
 	Theme   key.Binding
 	Help     key.Binding
@@ -187,6 +193,10 @@ func NewPostDetailKeyMap() PostDetailKeyMap {
 			key.WithKeys("s"),
 			key.WithHelp("s", "save"),
 		),
+		Delete: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "delete"),
+		),
 		Profile: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "profile"),
@@ -216,7 +226,7 @@ func (k PostDetailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.HalfUp, k.HalfDown},
 		{k.Top, k.Bottom, k.Back, k.Refresh},
-		{k.Reply, k.Save, k.Profile, k.Theme, k.Help, k.Quit},
+		{k.Reply, k.Save, k.Delete, k.Profile, k.Theme, k.Help, k.Quit},
 	}
 }
 
@@ -617,4 +627,80 @@ func (k ThemeSwitcherKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Apply, k.Close},
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTES KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// NotesKeyMap defines keybindings for the notes list view.
+type NotesKeyMap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Top     key.Binding
+	Bottom  key.Binding
+	Open    key.Binding
+	New     key.Binding
+	Edit    key.Binding
+	Delete  key.Binding
+	Refresh key.Binding
+	Back    key.Binding
+	Help    key.Binding
+	Quit    key.Binding
+}
+
+func NewNotesKeyMap() NotesKeyMap {
+	return NotesKeyMap{
+		Up:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Top:     key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "top")),
+		Bottom:  key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		Open:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		New:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new note")),
+		Edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Delete:  key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
+		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		Back:    key.NewBinding(key.WithKeys("esc", "backspace", "b"), key.WithHelp("esc", "back")),
+		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
+func (k NotesKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.New, k.Edit, k.Delete, k.Back, k.Quit}
+}
+
+func (k NotesKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.Open, k.New, k.Edit, k.Delete, k.Refresh},
+		{k.Back, k.Help, k.Quit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTE COMPOSE KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// NoteComposeKeyMap defines keybindings for the note compose/edit screen.
+type NoteComposeKeyMap struct {
+	SwitchField key.Binding
+	Save        key.Binding
+	Cancel      key.Binding
+}
+
+func NewNoteComposeKeyMap() NoteComposeKeyMap {
+	return NoteComposeKeyMap{
+		SwitchField: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
+		Save:        key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+		Cancel:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+	}
+}
+
+func (k NoteComposeKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.SwitchField, k.Save, k.Cancel}
+}
+
+func (k NoteComposeKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.SwitchField, k.Save, k.Cancel}}
 }

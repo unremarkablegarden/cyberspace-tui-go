@@ -32,6 +32,8 @@ const (
 	StateTopics
 	StateTopicFeed
 	StateEditProfile
+	StateNotes
+	StateNoteCompose
 )
 
 // ownUsernameMsg is sent after fetching the current user's username post-login
@@ -56,6 +58,8 @@ type Model struct {
 	topicsModel         views.TopicsModel
 	topicFeedModel      views.TopicFeedModel
 	editProfileModel    views.EditProfileModel
+	notesModel          views.NotesModel
+	noteComposeModel    views.NoteComposeModel
 	returnState         AppState
 }
 
@@ -104,6 +108,10 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, m.topicFeedModel.Init())
 	case StateEditProfile:
 		cmds = append(cmds, m.editProfileModel.Init())
+	case StateNotes:
+		cmds = append(cmds, m.notesModel.Init())
+	case StateNoteCompose:
+		cmds = append(cmds, m.noteComposeModel.Init())
 	}
 
 	return tea.Batch(cmds...)
@@ -276,6 +284,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.bookmarksModel.Init()
 		}
 
+		// Check if user wants to view notes
+		if _, ok := msg.(views.OpenNotesMsg); ok {
+			m.state = StateNotes
+			m.notesModel = views.NewNotesModel(m.baseURL, m.config.IDToken)
+			m.notesModel.SetSize(m.width, m.height)
+			return m, m.notesModel.Init()
+		}
+
 		// Check if user wants to compose a new post
 		if _, ok := msg.(views.OpenComposeMsg); ok {
 			m.state = StateCompose
@@ -291,6 +307,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.baseURL,
 				m.config.IDToken,
 				openMsg.Post,
+				m.config.Username,
 			)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
@@ -346,7 +363,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			prev := m.state
 			m.state = StatePostDetail
 			m.returnState = prev
-			m.postDetailModel = views.NewPostDetailModelWithPost(m.baseURL, m.config.IDToken, openMsg.Post)
+			m.postDetailModel = views.NewPostDetailModelWithPost(m.baseURL, m.config.IDToken, openMsg.Post, m.config.Username)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
 		}
@@ -392,7 +409,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if openMsg, ok := msg.(views.OpenPostFromNotificationMsg); ok {
 			m.state = StatePostDetail
 			m.returnState = StateNotifications
-			m.postDetailModel = views.NewPostDetailModel(m.baseURL, m.config.IDToken, openMsg.PostID)
+			m.postDetailModel = views.NewPostDetailModel(m.baseURL, m.config.IDToken, openMsg.PostID, m.config.Username)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
 		}
@@ -415,6 +432,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.baseURL,
 				m.config.IDToken,
 				openMsg.Post,
+				m.config.Username,
 			)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
@@ -456,7 +474,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if openMsg, ok := msg.(views.OpenPostMsg); ok {
 			m.state = StatePostDetail
 			m.returnState = StateTopicFeed
-			m.postDetailModel = views.NewPostDetailModelWithPost(m.baseURL, m.config.IDToken, openMsg.Post)
+			m.postDetailModel = views.NewPostDetailModelWithPost(m.baseURL, m.config.IDToken, openMsg.Post, m.config.Username)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
 		}
@@ -477,6 +495,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newFeed, feedCmd := m.feedModel.Update(views.RefreshFeedMsg{})
 			m.feedModel = newFeed.(views.FeedModel)
 			return m, feedCmd
+		}
+
+		return m, cmd
+
+	case StateNotes:
+		newNotes, cmd := m.notesModel.Update(msg)
+		m.notesModel = newNotes.(views.NotesModel)
+
+		if _, ok := msg.(views.BackFromNotesMsg); ok {
+			m.state = StateFeed
+			return m, nil
+		}
+
+		if openMsg, ok := msg.(views.OpenNoteComposeMsg); ok {
+			m.state = StateNoteCompose
+			m.noteComposeModel = views.NewNoteComposeModel(m.baseURL, m.config.IDToken, openMsg.Note, openMsg.IsEdit)
+			m.noteComposeModel.SetSize(m.width, m.height)
+			return m, m.noteComposeModel.Init()
+		}
+
+		return m, cmd
+
+	case StateNoteCompose:
+		newNoteCompose, cmd := m.noteComposeModel.Update(msg)
+		m.noteComposeModel = newNoteCompose.(views.NoteComposeModel)
+
+		if _, ok := msg.(views.NoteComposeDoneMsg); ok {
+			m.state = StateNotes
+			m.notesModel = views.NewNotesModel(m.baseURL, m.config.IDToken)
+			m.notesModel.SetSize(m.width, m.height)
+			return m, m.notesModel.Init()
 		}
 
 		return m, cmd
@@ -511,6 +560,10 @@ func (m Model) View() string {
 			v = m.topicFeedModel.View()
 		case StateEditProfile:
 			v = m.editProfileModel.View()
+		case StateNotes:
+			v = m.notesModel.View()
+		case StateNoteCompose:
+			v = m.noteComposeModel.View()
 		}
 	}
 	return zone.Scan(v)

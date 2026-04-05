@@ -202,6 +202,16 @@ func (c *Client) CreateReply(postID, content string) (string, error) {
 	return result.Data.ReplyID, nil
 }
 
+// DeletePost deletes a post by ID (must be the author)
+func (c *Client) DeletePost(postID string) error {
+	return c.doDelete(fmt.Sprintf("%s/v1/posts/%s", c.BaseURL, postID), "failed to delete post")
+}
+
+// DeleteReply deletes a reply by ID (must be the author)
+func (c *Client) DeleteReply(replyID string) error {
+	return c.doDelete(fmt.Sprintf("%s/v1/replies/%s", c.BaseURL, replyID), "failed to delete reply")
+}
+
 // FetchReplies retrieves replies for a post
 func (c *Client) FetchReplies(postID string) ([]models.Reply, error) {
 	reqURL := fmt.Sprintf("%s/v1/posts/%s/replies?limit=100", c.BaseURL, postID)
