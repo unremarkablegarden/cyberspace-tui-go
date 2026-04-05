@@ -179,6 +179,34 @@ func (c *Client) doDelete(reqURL string, errContext string) error {
 	return nil
 }
 
+// doPatchJSON performs an authenticated PATCH request with a JSON payload
+func (c *Client) doPatchJSON(reqURL string, payload any, errContext string) ([]byte, error) {
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("PATCH", reqURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.IDToken))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, parseAPIError(body, errContext)
+	}
+	return body, nil
+}
+
 // parseAPIError extracts a user-friendly error from the API error response
 func parseAPIError(body []byte, fallback string) error {
 	var errResp apiErrorResponse

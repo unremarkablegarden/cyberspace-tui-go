@@ -31,7 +31,11 @@ const (
 	StateProfile
 	StateTopics
 	StateTopicFeed
+	StateEditProfile
 )
+
+// ownUsernameMsg is sent after fetching the current user's username post-login
+type ownUsernameMsg struct{ username string }
 
 // Model is the main application model
 type Model struct {
@@ -51,6 +55,7 @@ type Model struct {
 	profileModel        views.ProfileModel
 	topicsModel         views.TopicsModel
 	topicFeedModel      views.TopicFeedModel
+	editProfileModel    views.EditProfileModel
 	returnState         AppState
 }
 
@@ -97,6 +102,8 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, m.topicsModel.Init())
 	case StateTopicFeed:
 		cmds = append(cmds, m.topicFeedModel.Init())
+	case StateEditProfile:
+		cmds = append(cmds, m.editProfileModel.Init())
 	}
 
 	return tea.Batch(cmds...)
@@ -174,11 +181,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newTopicFeed, cmd := m.topicFeedModel.Update(msg)
 			m.topicFeedModel = newTopicFeed.(views.TopicFeedModel)
 			return m, cmd
+		case StateEditProfile:
+			newEdit, cmd := m.editProfileModel.Update(msg)
+			m.editProfileModel = newEdit.(views.EditProfileModel)
+			return m, cmd
 		}
 		return m, nil
 
+
+
 	case views.ThemeSwitcherClosedMsg:
 		m.showThemeSwitcher = false
+		return m, nil
+
+	case ownUsernameMsg:
+		if m.config != nil && msg.username != "" {
+			m.config.Username = msg.username
+			if err := SaveConfig(m.config); err != nil {
+				log.Printf("Failed to save username: %v", err)
+			}
+		}
 		return m, nil
 	}
 
@@ -210,7 +232,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = StateFeed
 			m.feedModel = views.NewFeedModel(m.baseURL, m.config.IDToken)
 			m.feedModel.SetSize(m.width, m.height)
-			return m, m.feedModel.Init()
+			// Fetch own username if not already stored
+			var extraCmds []tea.Cmd
+			extraCmds = append(extraCmds, m.feedModel.Init())
+			if m.config.Username == "" {
+				extraCmds = append(extraCmds, fetchOwnUsernameCmd(m.baseURL, m.config.IDToken))
+			}
+			return m, tea.Batch(extraCmds...)
 		}
 
 		return m, cmd
@@ -321,6 +349,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.postDetailModel = views.NewPostDetailModelWithPost(m.baseURL, m.config.IDToken, openMsg.Post)
 			m.postDetailModel.SetSize(m.width, m.height)
 			return m, m.postDetailModel.Init()
+		}
+
+		if editMsg, ok := msg.(views.OpenEditProfileMsg); ok {
+			m.state = StateEditProfile
+			m.editProfileModel = views.NewEditProfileModel(m.baseURL, m.config.IDToken, editMsg.User)
+			m.editProfileModel.SetSize(m.width, m.height)
+			return m, m.editProfileModel.Init()
+		}
+
+		return m, cmd
+
+	case StateEditProfile:
+		newEdit, cmd := m.editProfileModel.Update(msg)
+		m.editProfileModel = newEdit.(views.EditProfileModel)
+
+		if doneMsg, ok := msg.(views.EditProfileDoneMsg); ok {
+			m.state = StateProfile
+			if doneMsg.Saved {
+				// Refresh the profile to show updated data
+				m.profileModel = views.NewProfileModel(
+					m.baseURL, m.config.IDToken,
+					m.profileModel.Username(), m.config.Username,
+				)
+				m.profileModel.SetSize(m.width, m.height)
+				return m, m.profileModel.Init()
+			}
+			return m, nil
 		}
 
 		return m, cmd
@@ -454,6 +509,8 @@ func (m Model) View() string {
 			v = m.topicsModel.View()
 		case StateTopicFeed:
 			v = m.topicFeedModel.View()
+		case StateEditProfile:
+			v = m.editProfileModel.View()
 		}
 	}
 	return zone.Scan(v)
@@ -463,9 +520,25 @@ func (m Model) View() string {
 func (m *Model) openProfile(username string) tea.Cmd {
 	m.returnState = m.state
 	m.state = StateProfile
-	m.profileModel = views.NewProfileModel(m.baseURL, m.config.IDToken, username)
+	currentUsername := ""
+	if m.config != nil {
+		currentUsername = m.config.Username
+	}
+	m.profileModel = views.NewProfileModel(m.baseURL, m.config.IDToken, username, currentUsername)
 	m.profileModel.SetSize(m.width, m.height)
 	return m.profileModel.Init()
+}
+
+// fetchOwnUsernameCmd fetches the current user's username after login
+func fetchOwnUsernameCmd(baseURL, idToken string) tea.Cmd {
+	return func() tea.Msg {
+		client := api.NewClient(baseURL, idToken)
+		user, err := client.FetchOwnProfile()
+		if err != nil {
+			return nil
+		}
+		return ownUsernameMsg{username: user.Username}
+	}
 }
 
 // refreshTokenIfNeeded checks if the token is expired and refreshes it

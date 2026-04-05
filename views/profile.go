@@ -39,29 +39,49 @@ type ProfileErrorMsg struct{ Err error }
 // BackFromProfileMsg is sent when navigating back from a profile
 type BackFromProfileMsg struct{}
 
+// followStatusMsg carries the initial follow status for a viewed profile
+type followStatusMsg struct {
+	isFollowing bool
+	followID    string
+}
+
+// followActionMsg carries the result of a follow/unfollow action
+type followActionMsg struct {
+	isFollowing bool
+	followID    string
+	err         error
+}
+
 // profileHeaderHeight is the number of lines reserved for the profile info section
-const profileHeaderHeight = 9
+const profileHeaderHeight = 12
 
 // ProfileModel is the user profile screen
 type ProfileModel struct {
-	username    string
-	user        models.User
-	list        list.Model
-	loading     bool
-	loadingMore bool
-	spinner     spinner.Model
-	err         error
-	client      *api.Client
-	nextCursor  string
-	hasMore     bool
-	width       int
-	height      int
-	keys        ProfileKeyMap
-	help        help.Model
+	username        string
+	currentUsername string
+	isOwnProfile    bool
+	user            models.User
+	list            list.Model
+	loading         bool
+	loadingMore     bool
+	spinner         spinner.Model
+	err             error
+	client          *api.Client
+	nextCursor      string
+	hasMore         bool
+	width           int
+	height          int
+	keys            ProfileKeyMap
+	help            help.Model
+	// follow state
+	isFollowing   bool
+	followID      string
+	followLoaded  bool
+	followPending bool
 }
 
 // NewProfileModel creates a new profile screen for the given username
-func NewProfileModel(baseURL, idToken, username string) ProfileModel {
+func NewProfileModel(baseURL, idToken, username, currentUsername string) ProfileModel {
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -79,14 +99,18 @@ func NewProfileModel(baseURL, idToken, username string) ProfileModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 
+	isOwn := currentUsername != "" && username == currentUsername
+
 	return ProfileModel{
-		username: username,
-		list:     l,
-		client:   api.NewClient(baseURL, idToken),
-		spinner:  NewSpinner(),
-		loading:  true,
-		keys:     NewProfileKeyMap(),
-		help:     h,
+		username:        username,
+		currentUsername: currentUsername,
+		isOwnProfile:    isOwn,
+		list:            l,
+		client:          api.NewClient(baseURL, idToken),
+		spinner:         NewSpinner(),
+		loading:         true,
+		keys:            NewProfileKeyMap(),
+		help:            h,
 	}
 }
 
@@ -111,7 +135,18 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
+			m.followLoaded = false
 			return m, tea.Batch(m.spinner.Tick, m.fetchProfile())
+		case key.Matches(msg, m.keys.Follow):
+			if !m.isOwnProfile && m.followLoaded && !m.followPending {
+				m.followPending = true
+				return m, tea.Batch(m.spinner.Tick, m.toggleFollow())
+			}
+		case key.Matches(msg, m.keys.EditProfile):
+			if m.isOwnProfile {
+				user := m.user
+				return m, func() tea.Msg { return OpenEditProfileMsg{User: user} }
+			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
 			case PostItem:
@@ -166,6 +201,10 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
+		// Fetch follow status for other users
+		if !m.isOwnProfile {
+			return m, tea.Batch(cmd, m.fetchFollowStatus())
+		}
 		return m, cmd
 
 	case MoreProfilePostsLoadedMsg:
@@ -192,6 +231,18 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
+
+	case followStatusMsg:
+		m.followLoaded = true
+		m.isFollowing = msg.isFollowing
+		m.followID = msg.followID
+
+	case followActionMsg:
+		m.followPending = false
+		if msg.err == nil {
+			m.isFollowing = msg.isFollowing
+			m.followID = msg.followID
+		}
 
 	case ThemeChangedMsg:
 		m.spinner.Style = styles.Spinner
@@ -281,6 +332,22 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 		content.WriteString(styles.Dim.Render("⌖ " + m.user.LocationName) + "\n")
 	}
 
+	// Follow status / edit button
+	content.WriteString("\n")
+	if m.isOwnProfile {
+		content.WriteString(styles.Dim.Render("[e] edit profile") + "\n")
+	} else if m.followPending {
+		content.WriteString(m.spinner.View() + styles.Dim.Render(" ...") + "\n")
+	} else if m.followLoaded {
+		if m.isFollowing {
+			content.WriteString(styles.Success.Render("● following") + styles.Dim.Render("  [f] unfollow") + "\n")
+		} else {
+			content.WriteString(styles.Dim.Render("[f] follow") + "\n")
+		}
+	} else {
+		content.WriteString(styles.Dim.Render("...") + "\n")
+	}
+
 	// Posts header
 	postCount := len(m.list.Items())
 	postsLabel := fmt.Sprintf("POSTS [%d]", postCount)
@@ -324,6 +391,11 @@ func (m ProfileModel) renderFooter(width int) string {
 	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
+// Username returns the username this profile is showing
+func (m ProfileModel) Username() string {
+	return m.username
+}
+
 // SetSize updates the view dimensions
 func (m *ProfileModel) SetSize(width, height int) {
 	m.width = width
@@ -356,5 +428,42 @@ func (m ProfileModel) fetchMorePosts() tea.Cmd {
 			return ProfileErrorMsg{Err: err}
 		}
 		return MoreProfilePostsLoadedMsg{Posts: posts, Cursor: cursor}
+	}
+}
+
+func (m ProfileModel) fetchFollowStatus() tea.Cmd {
+	userID := m.user.ID
+	return func() tea.Msg {
+		follows, err := m.client.FetchMyFollowing(50)
+		if err != nil {
+			// Non-fatal: just show follow button without status
+			return followStatusMsg{isFollowing: false, followID: ""}
+		}
+		for _, f := range follows {
+			if f.FollowedID == userID {
+				return followStatusMsg{isFollowing: true, followID: f.ID}
+			}
+		}
+		return followStatusMsg{isFollowing: false, followID: ""}
+	}
+}
+
+func (m ProfileModel) toggleFollow() tea.Cmd {
+	if m.isFollowing {
+		followID := m.followID
+		return func() tea.Msg {
+			if err := m.client.Unfollow(followID); err != nil {
+				return followActionMsg{isFollowing: true, followID: followID, err: err}
+			}
+			return followActionMsg{isFollowing: false, followID: ""}
+		}
+	}
+	userID := m.user.ID
+	return func() tea.Msg {
+		newFollowID, err := m.client.FollowUser(userID)
+		if err != nil {
+			return followActionMsg{isFollowing: false, followID: "", err: err}
+		}
+		return followActionMsg{isFollowing: true, followID: newFollowID}
 	}
 }

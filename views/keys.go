@@ -428,15 +428,17 @@ func (k TopicFeedKeyMap) FullHelp() [][]key.Binding {
 
 // ProfileKeyMap defines keybindings for the profile view.
 type ProfileKeyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Top     key.Binding
-	Bottom  key.Binding
-	Open    key.Binding
-	Refresh key.Binding
-	Back    key.Binding
-	Help    key.Binding
-	Quit    key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	Top         key.Binding
+	Bottom      key.Binding
+	Open        key.Binding
+	Follow      key.Binding
+	EditProfile key.Binding
+	Refresh     key.Binding
+	Back        key.Binding
+	Help        key.Binding
+	Quit        key.Binding
 }
 
 // NewProfileKeyMap returns the default profile keybindings.
@@ -462,6 +464,14 @@ func NewProfileKeyMap() ProfileKeyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "open post"),
 		),
+		Follow: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "follow/unfollow"),
+		),
+		EditProfile: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit profile"),
+		),
 		Refresh: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "refresh"),
@@ -483,15 +493,15 @@ func NewProfileKeyMap() ProfileKeyMap {
 
 // ShortHelp returns the short help bindings.
 func (k ProfileKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Open, k.Back, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Open, k.Follow, k.Back, k.Help, k.Quit}
 }
 
 // FullHelp returns the full help bindings grouped in columns.
 func (k ProfileKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Top, k.Bottom},
-		{k.Open, k.Refresh, k.Back},
-		{k.Help, k.Quit},
+		{k.Open, k.Follow, k.EditProfile, k.Refresh},
+		{k.Back, k.Help, k.Quit},
 	}
 }
 

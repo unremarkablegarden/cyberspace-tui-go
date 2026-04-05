@@ -17,6 +17,34 @@ type userPostsResponse struct {
 	Cursor *string       `json:"cursor"`
 }
 
+// FetchOwnProfile retrieves the current user's own profile
+func (c *Client) FetchOwnProfile() (*models.User, error) {
+	body, err := c.doGet(fmt.Sprintf("%s/v1/users/me", c.BaseURL))
+	if err != nil {
+		return nil, err
+	}
+	var resp userResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+// UpdateProfileRequest holds the fields to update on the user's profile
+type UpdateProfileRequest struct {
+	DisplayName  string `json:"displayName,omitempty"`
+	Bio          string `json:"bio,omitempty"`
+	WebsiteURL   string `json:"websiteUrl,omitempty"`
+	WebsiteName  string `json:"websiteName,omitempty"`
+	LocationName string `json:"locationName,omitempty"`
+}
+
+// UpdateProfile updates the current user's profile
+func (c *Client) UpdateProfile(req UpdateProfileRequest) error {
+	_, err := c.doPatchJSON(fmt.Sprintf("%s/v1/users/me", c.BaseURL), req, "profile update failed")
+	return err
+}
+
 // FetchUser retrieves a user's profile by username
 func (c *Client) FetchUser(username string) (*models.User, error) {
 	reqURL := fmt.Sprintf("%s/v1/users/%s", c.BaseURL, url.PathEscape(username))
