@@ -19,6 +19,7 @@ import (
 
 const headerHeight = 2 // title bar + blank line
 const footerHeight = 2 // divider + status line
+const hintHeight = 1   // contextual actions hint line
 
 // PostDetailLoadedMsg is sent when post and replies are loaded
 type PostDetailLoadedMsg struct {
@@ -240,7 +241,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		vpHeight := msg.Height - headerHeight - footerHeight
+		vpHeight := msg.Height - headerHeight - footerHeight - hintHeight
 		if vpHeight < 1 {
 			vpHeight = 1
 		}
@@ -357,6 +358,10 @@ func (m PostDetailModel) View() string {
 		b.WriteString("\n")
 	}
 
+	// Contextual hint line
+	b.WriteString(m.renderHints(w))
+	b.WriteString("\n")
+
 	// Footer
 	b.WriteString(m.renderFooter(w))
 
@@ -444,7 +449,7 @@ func (m PostDetailModel) renderComposeArea(width int) string {
 }
 
 func (m *PostDetailModel) resizeViewport() {
-	vpHeight := m.height - headerHeight - footerHeight
+	vpHeight := m.height - headerHeight - footerHeight - hintHeight
 	if m.composing {
 		vpHeight -= composeHeight
 	}
@@ -452,6 +457,100 @@ func (m *PostDetailModel) resizeViewport() {
 		vpHeight = 1
 	}
 	m.viewport.Height = vpHeight
+}
+
+func (m PostDetailModel) renderHints(width int) string {
+	var hints []string
+
+	if !m.composing {
+		hints = append(hints, styles.Dim.Render("[c]")+styles.Normal.Render(" reply"))
+		if m.bookmarked {
+			hints = append(hints, styles.Success.Render("■ saved"))
+		} else {
+			hints = append(hints, styles.Dim.Render("[s]")+styles.Normal.Render(" save"))
+		}
+		hints = append(hints, styles.Dim.Render("[p]")+styles.Normal.Render(" @"+m.post.AuthorUsername))
+		if m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
+			hints = append(hints, styles.Dim.Render("[D]")+styles.Error.Render(" delete"))
+		}
+		hints = append(hints, styles.Dim.Render("[b]")+styles.Normal.Render(" back"))
+	}
+
+	line := "  " + strings.Join(hints, styles.Dim.Render("  ·  "))
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < width {
+		line += strings.Repeat(" ", width-lineWidth)
+	}
+	return line
+}
+
+// replyNode is a node in the reply tree
+type replyNode struct {
+	Reply    models.Reply
+	Children []*replyNode
+}
+
+// buildReplyTree organises a flat reply list into a tree using ParentReplyID
+func buildReplyTree(replies []models.Reply) []*replyNode {
+	nodes := make(map[string]*replyNode, len(replies))
+	for i := range replies {
+		nodes[replies[i].ID] = &replyNode{Reply: replies[i]}
+	}
+	var roots []*replyNode
+	for _, r := range replies {
+		node := nodes[r.ID]
+		if r.ParentReplyID == "" {
+			roots = append(roots, node)
+		} else if parent, ok := nodes[r.ParentReplyID]; ok {
+			parent.Children = append(parent.Children, node)
+		} else {
+			roots = append(roots, node)
+		}
+	}
+	return roots
+}
+
+// renderReplyNode renders a reply and its children with indentation
+func renderReplyNode(node *replyNode, depth int, isLast bool, contentWidth int) string {
+	var b strings.Builder
+
+	// Build indent prefix
+	var prefix, childPrefix string
+	if depth == 0 {
+		prefix = ""
+		childPrefix = ""
+	} else {
+		indent := strings.Repeat("│  ", depth-1)
+		if isLast {
+			prefix = indent + "└─ "
+			childPrefix = indent + "   "
+		} else {
+			prefix = indent + "├─ "
+			childPrefix = indent + "│  "
+		}
+	}
+
+	// Header line: @username · time
+	b.WriteString(styles.Dim.Render(prefix))
+	b.WriteString(styles.Username.Render("@" + node.Reply.AuthorUsername))
+	b.WriteString(styles.Dim.Render(" · " + TimeAgo(node.Reply.CreatedAt)))
+	b.WriteString("\n")
+
+	// Content lines with continuation indent
+	content := StripMarkdownKeepNewlines(node.Reply.Content)
+	for _, line := range strings.Split(content, "\n") {
+		b.WriteString(styles.Dim.Render(childPrefix))
+		b.WriteString(styles.Normal.Render(line))
+		b.WriteString("\n")
+	}
+
+	// Render children
+	for i, child := range node.Children {
+		b.WriteString("\n")
+		b.WriteString(renderReplyNode(child, depth+1, i == len(node.Children)-1, contentWidth))
+	}
+
+	return b.String()
 }
 
 func (m PostDetailModel) deletePost() tea.Cmd {
@@ -549,18 +648,16 @@ func (m PostDetailModel) buildContent(width int) string {
 	} else if len(m.replies) == 0 {
 		b.WriteString(renderBox("REPLIES", "No replies yet", 40))
 	} else {
+		roots := buildReplyTree(m.replies)
 		var repliesContent strings.Builder
-		for i, reply := range m.replies {
-			repliesContent.WriteString(styles.Username.Render("@" + reply.AuthorUsername))
-			repliesContent.WriteString(styles.Dim.Render(" · " + TimeAgo(reply.CreatedAt)))
-			repliesContent.WriteString("\n")
-			repliesContent.WriteString(StripMarkdownKeepNewlines(reply.Content))
-			if i < len(m.replies)-1 {
-				repliesContent.WriteString("\n\n")
+		for i, root := range roots {
+			repliesContent.WriteString(renderReplyNode(root, 0, false, contentWidth))
+			if i < len(roots)-1 {
+				repliesContent.WriteString("\n")
 			}
 		}
 		replyTitle := fmt.Sprintf("REPLIES [%d]", len(m.replies))
-		b.WriteString(renderBox(replyTitle, repliesContent.String(), contentWidth))
+		b.WriteString(renderBox(replyTitle, strings.TrimRight(repliesContent.String(), "\n"), contentWidth))
 	}
 
 	return b.String()
@@ -640,7 +737,7 @@ func (m PostDetailModel) Composing() bool { return m.composing }
 func (m *PostDetailModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	vpHeight := height - headerHeight - footerHeight
+	vpHeight := height - headerHeight - footerHeight - hintHeight
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
