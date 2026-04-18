@@ -17,9 +17,15 @@ type FeedKeyMap struct {
 	Open    key.Binding
 	Refresh key.Binding
 	Theme   key.Binding
-	Logout  key.Binding
-	Help    key.Binding
-	Quit    key.Binding
+	Logout        key.Binding
+	NewPost       key.Binding
+	Bookmarks     key.Binding
+	Notifications key.Binding
+	Topics        key.Binding
+	Notes         key.Binding
+	Profile       key.Binding
+	Help          key.Binding
+	Quit          key.Binding
 }
 
 // NewFeedKeyMap returns the default feed keybindings.
@@ -57,6 +63,30 @@ func NewFeedKeyMap() FeedKeyMap {
 			key.WithKeys("L"),
 			key.WithHelp("L", "logout"),
 		),
+		NewPost: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new post"),
+		),
+		Bookmarks: key.NewBinding(
+			key.WithKeys("B"),
+			key.WithHelp("B", "bookmarks"),
+		),
+		Notifications: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "notifications"),
+		),
+		Topics: key.NewBinding(
+			key.WithKeys("T"),
+			key.WithHelp("T", "topics"),
+		),
+		Profile: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "profile"),
+		),
+		Notes: key.NewBinding(
+			key.WithKeys("M"),
+			key.WithHelp("M", "notes"),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -70,15 +100,15 @@ func NewFeedKeyMap() FeedKeyMap {
 
 // ShortHelp returns the short help bindings.
 func (k FeedKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Open, k.Refresh, k.Theme, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Open, k.NewPost, k.Topics, k.Bookmarks, k.Help, k.Quit}
 }
 
 // FullHelp returns the full help bindings grouped in columns.
 func (k FeedKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Top, k.Bottom},
-		{k.Open, k.Refresh},
-		{k.Theme, k.Logout, k.Help, k.Quit},
+		{k.Open, k.NewPost, k.Topics, k.Bookmarks, k.Notifications, k.Notes, k.Refresh},
+		{k.Profile, k.Theme, k.Logout, k.Help, k.Quit},
 	}
 }
 
@@ -98,9 +128,12 @@ type PostDetailKeyMap struct {
 	Bottom   key.Binding
 	Back     key.Binding
 	Refresh  key.Binding
-	Reply    key.Binding
-	Send     key.Binding
-	Theme    key.Binding
+	Reply   key.Binding
+	Send    key.Binding
+	Save    key.Binding
+	Delete  key.Binding
+	Profile key.Binding
+	Theme   key.Binding
 	Help     key.Binding
 	Quit     key.Binding
 }
@@ -151,12 +184,22 @@ func NewPostDetailKeyMap() PostDetailKeyMap {
 		Reply: key.NewBinding(
 			key.WithKeys("c"),
 			key.WithHelp("c", "reply"),
-			key.WithDisabled(),
 		),
 		Send: key.NewBinding(
 			key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "send"),
-			key.WithDisabled(),
+		),
+		Save: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "save"),
+		),
+		Delete: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "delete"),
+		),
+		Profile: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "profile"),
 		),
 		Theme: key.NewBinding(
 			key.WithKeys("t"),
@@ -183,7 +226,7 @@ func (k PostDetailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.HalfUp, k.HalfDown},
 		{k.Top, k.Bottom, k.Back, k.Refresh},
-		{k.Theme, k.Help, k.Quit},
+		{k.Reply, k.Save, k.Delete, k.Profile, k.Theme, k.Help, k.Quit},
 	}
 }
 
@@ -225,6 +268,318 @@ func (k LoginKeyMap) ShortHelp() []key.Binding {
 func (k LoginKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.NextField, k.PrevField, k.Submit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOOKMARKS KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// BookmarksKeyMap defines keybindings for the bookmarks view.
+type BookmarksKeyMap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Top     key.Binding
+	Bottom  key.Binding
+	Open    key.Binding
+	Remove  key.Binding
+	Refresh key.Binding
+	Back    key.Binding
+	Theme   key.Binding
+	Help    key.Binding
+	Quit    key.Binding
+}
+
+// NewBookmarksKeyMap returns the default bookmarks keybindings.
+func NewBookmarksKeyMap() BookmarksKeyMap {
+	return BookmarksKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("k", "up"),
+			key.WithHelp("k/↑", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("j", "down"),
+			key.WithHelp("j/↓", "down"),
+		),
+		Top: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "top"),
+		),
+		Bottom: key.NewBinding(
+			key.WithKeys("G"),
+			key.WithHelp("G", "bottom"),
+		),
+		Open: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "open"),
+		),
+		Remove: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "remove"),
+		),
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh"),
+		),
+		Back: key.NewBinding(
+			key.WithKeys("esc", "backspace", "b"),
+			key.WithHelp("esc", "back"),
+		),
+		Theme: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "theme"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "help"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
+// ShortHelp returns the short help bindings.
+func (k BookmarksKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.Remove, k.Back, k.Help, k.Quit}
+}
+
+// FullHelp returns the full help bindings grouped in columns.
+func (k BookmarksKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.Open, k.Remove, k.Refresh},
+		{k.Theme, k.Back, k.Help, k.Quit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TOPICS KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TopicsKeyMap defines keybindings for the topics browser.
+type TopicsKeyMap struct {
+	Up   key.Binding
+	Down key.Binding
+	Open key.Binding
+	Back key.Binding
+	Help key.Binding
+	Quit key.Binding
+}
+
+func NewTopicsKeyMap() TopicsKeyMap {
+	return TopicsKeyMap{
+		Up:   key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down: key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Open: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "browse")),
+		Back: key.NewBinding(key.WithKeys("esc", "backspace", "b"), key.WithHelp("esc", "back")),
+		Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit: key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
+func (k TopicsKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.Back, k.Quit}
+}
+
+func (k TopicsKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Up, k.Down, k.Open, k.Back, k.Help, k.Quit}}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TOPIC FEED KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TopicFeedKeyMap defines keybindings for the topic feed.
+type TopicFeedKeyMap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Top     key.Binding
+	Bottom  key.Binding
+	Open    key.Binding
+	Profile key.Binding
+	Refresh key.Binding
+	Back    key.Binding
+	Help    key.Binding
+	Quit    key.Binding
+}
+
+func NewTopicFeedKeyMap() TopicFeedKeyMap {
+	return TopicFeedKeyMap{
+		Up:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Top:     key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "top")),
+		Bottom:  key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		Open:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		Profile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "profile")),
+		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		Back:    key.NewBinding(key.WithKeys("esc", "backspace", "b"), key.WithHelp("esc", "back")),
+		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
+func (k TopicFeedKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.Profile, k.Back, k.Help, k.Quit}
+}
+
+func (k TopicFeedKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.Open, k.Profile, k.Refresh, k.Back},
+		{k.Help, k.Quit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROFILE KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ProfileKeyMap defines keybindings for the profile view.
+type ProfileKeyMap struct {
+	Up          key.Binding
+	Down        key.Binding
+	Top         key.Binding
+	Bottom      key.Binding
+	Open        key.Binding
+	Follow      key.Binding
+	EditProfile key.Binding
+	Refresh     key.Binding
+	Back        key.Binding
+	Help        key.Binding
+	Quit        key.Binding
+}
+
+// NewProfileKeyMap returns the default profile keybindings.
+func NewProfileKeyMap() ProfileKeyMap {
+	return ProfileKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("k", "up"),
+			key.WithHelp("k/↑", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("j", "down"),
+			key.WithHelp("j/↓", "down"),
+		),
+		Top: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "top"),
+		),
+		Bottom: key.NewBinding(
+			key.WithKeys("G"),
+			key.WithHelp("G", "bottom"),
+		),
+		Open: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "open post"),
+		),
+		Follow: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "follow/unfollow"),
+		),
+		EditProfile: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit profile"),
+		),
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh"),
+		),
+		Back: key.NewBinding(
+			key.WithKeys("esc", "backspace", "b"),
+			key.WithHelp("esc", "back"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "help"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
+// ShortHelp returns the short help bindings.
+func (k ProfileKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.Follow, k.Back, k.Help, k.Quit}
+}
+
+// FullHelp returns the full help bindings grouped in columns.
+func (k ProfileKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.Open, k.Follow, k.EditProfile, k.Refresh},
+		{k.Back, k.Help, k.Quit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// NotificationsKeyMap defines keybindings for the notifications view.
+type NotificationsKeyMap struct {
+	Up          key.Binding
+	Down        key.Binding
+	Open        key.Binding
+	MarkAllRead key.Binding
+	Refresh     key.Binding
+	Back        key.Binding
+	Help        key.Binding
+	Quit        key.Binding
+}
+
+// NewNotificationsKeyMap returns the default notifications keybindings.
+func NewNotificationsKeyMap() NotificationsKeyMap {
+	return NotificationsKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("k", "up"),
+			key.WithHelp("k/↑", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("j", "down"),
+			key.WithHelp("j/↓", "down"),
+		),
+		Open: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "open post"),
+		),
+		MarkAllRead: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "mark all read"),
+		),
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh"),
+		),
+		Back: key.NewBinding(
+			key.WithKeys("esc", "backspace", "b"),
+			key.WithHelp("esc", "back"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "help"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
+// ShortHelp returns the short help bindings.
+func (k NotificationsKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.MarkAllRead, k.Back, k.Help, k.Quit}
+}
+
+// FullHelp returns the full help bindings grouped in columns.
+func (k NotificationsKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down},
+		{k.Open, k.MarkAllRead, k.Refresh},
+		{k.Back, k.Help, k.Quit},
 	}
 }
 
@@ -272,4 +627,80 @@ func (k ThemeSwitcherKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Apply, k.Close},
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTES KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// NotesKeyMap defines keybindings for the notes list view.
+type NotesKeyMap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Top     key.Binding
+	Bottom  key.Binding
+	Open    key.Binding
+	New     key.Binding
+	Edit    key.Binding
+	Delete  key.Binding
+	Refresh key.Binding
+	Back    key.Binding
+	Help    key.Binding
+	Quit    key.Binding
+}
+
+func NewNotesKeyMap() NotesKeyMap {
+	return NotesKeyMap{
+		Up:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Top:     key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "top")),
+		Bottom:  key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		Open:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		New:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new note")),
+		Edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Delete:  key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
+		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		Back:    key.NewBinding(key.WithKeys("esc", "backspace", "b"), key.WithHelp("esc", "back")),
+		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
+func (k NotesKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Open, k.New, k.Edit, k.Delete, k.Back, k.Quit}
+}
+
+func (k NotesKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.Open, k.New, k.Edit, k.Delete, k.Refresh},
+		{k.Back, k.Help, k.Quit},
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTE COMPOSE KEY MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// NoteComposeKeyMap defines keybindings for the note compose/edit screen.
+type NoteComposeKeyMap struct {
+	SwitchField key.Binding
+	Save        key.Binding
+	Cancel      key.Binding
+}
+
+func NewNoteComposeKeyMap() NoteComposeKeyMap {
+	return NoteComposeKeyMap{
+		SwitchField: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
+		Save:        key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+		Cancel:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+	}
+}
+
+func (k NoteComposeKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.SwitchField, k.Save, k.Cancel}
+}
+
+func (k NoteComposeKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.SwitchField, k.Save, k.Cancel}}
 }

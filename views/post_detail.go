@@ -19,6 +19,7 @@ import (
 
 const headerHeight = 2 // title bar + blank line
 const footerHeight = 2 // divider + status line
+const hintHeight = 1   // contextual actions hint line
 
 // PostDetailLoadedMsg is sent when post and replies are loaded
 type PostDetailLoadedMsg struct {
@@ -40,27 +41,46 @@ type ReplyCreatedMsg struct{ ReplyID string }
 // ReplyErrorMsg is sent when creating a reply fails
 type ReplyErrorMsg struct{ Err error }
 
+// BookmarkAddedMsg is sent when a post is successfully bookmarked
+type BookmarkAddedMsg struct{ BookmarkID string }
+
+// BookmarkAddErrorMsg is sent when bookmarking a post fails
+type BookmarkAddErrorMsg struct{ Err error }
+
 const composeHeight = 6 // textarea height including border
+
+// postDeletedMsg is sent internally when a delete succeeds
+type postDeletedMsg struct{}
+
+// postDeleteErrMsg is sent internally when a delete fails
+type postDeleteErrMsg struct{ Err error }
 
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
-	post         models.Post
-	replies      []models.Reply
-	loading      bool
-	spinner      spinner.Model
-	err          error
-	client       *api.Client
-	postID       string
-	width        int
-	height       int
-	keys     PostDetailKeyMap
-	help     help.Model
-	viewport viewport.Model
-	ready        bool // true once we've received a WindowSizeMsg
-	replyInput   textarea.Model
-	composing    bool
-	replySending bool
-	replyErr     error
+	post            models.Post
+	replies         []models.Reply
+	loading         bool
+	spinner         spinner.Model
+	err             error
+	client          *api.Client
+	postID          string
+	currentUsername string
+	width           int
+	height          int
+	keys            PostDetailKeyMap
+	help            help.Model
+	viewport        viewport.Model
+	ready           bool // true once we've received a WindowSizeMsg
+	replyInput      textarea.Model
+	composing       bool
+	replySending    bool
+	replyErr        error
+	bookmarking     bool
+	bookmarked      bool
+	bookmarkErr     error
+	confirmingDelete bool
+	deleting        bool
+	deleteErr       error
 }
 
 func newReplyTextarea() textarea.Model {
@@ -92,36 +112,38 @@ func newDetailViewport() viewport.Model {
 }
 
 // NewPostDetailModel creates a new post detail screen
-func NewPostDetailModel(baseURL, idToken, postID string) PostDetailModel {
+func NewPostDetailModel(baseURL, idToken, postID, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	return PostDetailModel{
-		client:     api.NewClient(baseURL, idToken),
-		postID:     postID,
-		spinner:    NewSpinner(),
-		loading:    true,
-		keys:       NewPostDetailKeyMap(),
-		help:       h,
-		viewport:   newDetailViewport(),
-		replyInput: newReplyTextarea(),
+		client:          api.NewClient(baseURL, idToken),
+		postID:          postID,
+		currentUsername: currentUsername,
+		spinner:         NewSpinner(),
+		loading:         true,
+		keys:            NewPostDetailKeyMap(),
+		help:            h,
+		viewport:        newDetailViewport(),
+		replyInput:      newReplyTextarea(),
 	}
 }
 
 // NewPostDetailModelWithPost creates a detail screen with post already loaded
-func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post) PostDetailModel {
+func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
 	m := PostDetailModel{
-		client:     api.NewClient(baseURL, idToken),
-		postID:     post.ID,
-		post:       post,
-		spinner:    NewSpinner(),
-		loading:    true,
-		keys:       NewPostDetailKeyMap(),
-		help:       h,
-		viewport:   vp,
-		replyInput: newReplyTextarea(),
+		client:          api.NewClient(baseURL, idToken),
+		postID:          post.ID,
+		post:            post,
+		currentUsername: currentUsername,
+		spinner:         NewSpinner(),
+		loading:         true,
+		keys:            NewPostDetailKeyMap(),
+		help:            h,
+		viewport:        vp,
+		replyInput:      newReplyTextarea(),
 	}
 	// Pre-populate viewport so post shows immediately while replies load
 	w, _ := SafeDimensions(0, 0)
@@ -164,6 +186,21 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Confirm delete prompt
+		if m.confirmingDelete {
+			switch msg.String() {
+			case "y", "Y":
+				m.confirmingDelete = false
+				m.deleting = true
+				m.deleteErr = nil
+				return m, tea.Batch(m.spinner.Tick, m.deletePost())
+			case "n", "N", "esc":
+				m.confirmingDelete = false
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Normal (non-compose) key handling
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -173,6 +210,11 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
 			return m, func() tea.Msg { return BackToFeedMsg{} }
+		case key.Matches(msg, m.keys.Delete):
+			if !m.deleting && m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
+				m.confirmingDelete = true
+				return m, nil
+			}
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -184,13 +226,22 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.replyInput.Focus()
 			m.resizeViewport()
 			return m, m.replyInput.Focus()
+		case key.Matches(msg, m.keys.Save):
+			if !m.bookmarking && !m.bookmarked {
+				m.bookmarking = true
+				m.bookmarkErr = nil
+				return m, m.addBookmark()
+			}
+		case key.Matches(msg, m.keys.Profile):
+			username := m.post.AuthorUsername
+			return m, func() tea.Msg { return OpenProfileMsg{Username: username} }
 		}
 		// Everything else (j/k, g/G, pgup/pgdn, etc.) falls through to viewport
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		vpHeight := msg.Height - headerHeight - footerHeight
+		vpHeight := msg.Height - headerHeight - footerHeight - hintHeight
 		if vpHeight < 1 {
 			vpHeight = 1
 		}
@@ -239,6 +290,24 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ReplyErrorMsg:
 		m.replySending = false
 		m.replyErr = msg.Err
+
+	case BookmarkAddedMsg:
+		m.bookmarking = false
+		m.bookmarked = true
+		m.post.BookmarksCount++
+		w, _ := SafeDimensions(m.width, m.height)
+		m.viewport.SetContent(m.buildContent(w))
+
+	case BookmarkAddErrorMsg:
+		m.bookmarking = false
+		m.bookmarkErr = msg.Err
+
+	case postDeletedMsg:
+		return m, func() tea.Msg { return BackToFeedMsg{} }
+
+	case postDeleteErrMsg:
+		m.deleting = false
+		m.deleteErr = msg.Err
 
 	case ThemeChangedMsg:
 		m.spinner.Style = styles.Spinner
@@ -289,6 +358,10 @@ func (m PostDetailModel) View() string {
 		b.WriteString("\n")
 	}
 
+	// Contextual hint line
+	b.WriteString(m.renderHints(w))
+	b.WriteString("\n")
+
 	// Footer
 	b.WriteString(m.renderFooter(w))
 
@@ -303,12 +376,27 @@ func (m PostDetailModel) renderFooter(width int) string {
 	navHint := m.help.View(m.keys)
 	navWidth := lipgloss.Width(navHint)
 
-	// Divider fills the left, help sits on the right — same line
-	dividerWidth := width - navWidth - 1
+	var status string
+	if m.confirmingDelete {
+		status = styles.Error.Render(" [delete post? y/n]")
+	} else if m.deleting {
+		status = styles.Dim.Render(" [deleting...]")
+	} else if m.deleteErr != nil {
+		status = styles.Error.Render(" [delete failed: " + m.deleteErr.Error() + "]")
+	} else if m.bookmarking {
+		status = styles.Dim.Render(" [saving...]")
+	} else if m.bookmarked {
+		status = styles.Normal.Render(" [■ saved]")
+	} else if m.bookmarkErr != nil {
+		status = styles.Error.Render(" [save failed: " + m.bookmarkErr.Error() + "]")
+	}
+	statusWidth := lipgloss.Width(status)
+
+	dividerWidth := width - navWidth - statusWidth - 1
 	if dividerWidth < 1 {
 		dividerWidth = 1
 	}
-	return styles.Divider(dividerWidth) + " " + navHint
+	return styles.Divider(dividerWidth) + status + " " + navHint
 }
 
 func (m PostDetailModel) renderComposeArea(width int) string {
@@ -361,7 +449,7 @@ func (m PostDetailModel) renderComposeArea(width int) string {
 }
 
 func (m *PostDetailModel) resizeViewport() {
-	vpHeight := m.height - headerHeight - footerHeight
+	vpHeight := m.height - headerHeight - footerHeight - hintHeight
 	if m.composing {
 		vpHeight -= composeHeight
 	}
@@ -369,6 +457,119 @@ func (m *PostDetailModel) resizeViewport() {
 		vpHeight = 1
 	}
 	m.viewport.Height = vpHeight
+}
+
+func (m PostDetailModel) renderHints(width int) string {
+	var hints []string
+
+	if !m.composing {
+		hints = append(hints, styles.Dim.Render("[c]")+styles.Normal.Render(" reply"))
+		if m.bookmarked {
+			hints = append(hints, styles.Success.Render("■ saved"))
+		} else {
+			hints = append(hints, styles.Dim.Render("[s]")+styles.Normal.Render(" save"))
+		}
+		hints = append(hints, styles.Dim.Render("[p]")+styles.Normal.Render(" @"+m.post.AuthorUsername))
+		if m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
+			hints = append(hints, styles.Dim.Render("[D]")+styles.Error.Render(" delete"))
+		}
+		hints = append(hints, styles.Dim.Render("[b]")+styles.Normal.Render(" back"))
+	}
+
+	line := "  " + strings.Join(hints, styles.Dim.Render("  ·  "))
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < width {
+		line += strings.Repeat(" ", width-lineWidth)
+	}
+	return line
+}
+
+// replyNode is a node in the reply tree
+type replyNode struct {
+	Reply    models.Reply
+	Children []*replyNode
+}
+
+// buildReplyTree organises a flat reply list into a tree using ParentReplyID
+func buildReplyTree(replies []models.Reply) []*replyNode {
+	nodes := make(map[string]*replyNode, len(replies))
+	for i := range replies {
+		nodes[replies[i].ID] = &replyNode{Reply: replies[i]}
+	}
+	var roots []*replyNode
+	for _, r := range replies {
+		node := nodes[r.ID]
+		if r.ParentReplyID == "" {
+			roots = append(roots, node)
+		} else if parent, ok := nodes[r.ParentReplyID]; ok {
+			parent.Children = append(parent.Children, node)
+		} else {
+			roots = append(roots, node)
+		}
+	}
+	return roots
+}
+
+// renderReplyNode renders a reply and its children with indentation
+func renderReplyNode(node *replyNode, depth int, isLast bool, contentWidth int) string {
+	var b strings.Builder
+
+	// Build indent prefix
+	var prefix, childPrefix string
+	if depth == 0 {
+		prefix = ""
+		childPrefix = ""
+	} else {
+		indent := strings.Repeat("│  ", depth-1)
+		if isLast {
+			prefix = indent + "└─ "
+			childPrefix = indent + "   "
+		} else {
+			prefix = indent + "├─ "
+			childPrefix = indent + "│  "
+		}
+	}
+
+	// Header line: @username · time
+	b.WriteString(styles.Dim.Render(prefix))
+	b.WriteString(styles.Username.Render("@" + node.Reply.AuthorUsername))
+	b.WriteString(styles.Dim.Render(" · " + TimeAgo(node.Reply.CreatedAt)))
+	b.WriteString("\n")
+
+	// Content lines with continuation indent
+	content := StripMarkdownKeepNewlines(node.Reply.Content)
+	for _, line := range strings.Split(content, "\n") {
+		b.WriteString(styles.Dim.Render(childPrefix))
+		b.WriteString(styles.Normal.Render(line))
+		b.WriteString("\n")
+	}
+
+	// Render children
+	for i, child := range node.Children {
+		b.WriteString("\n")
+		b.WriteString(renderReplyNode(child, depth+1, i == len(node.Children)-1, contentWidth))
+	}
+
+	return b.String()
+}
+
+func (m PostDetailModel) deletePost() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.DeletePost(m.postID); err != nil {
+			return postDeleteErrMsg{Err: err}
+		}
+		return postDeletedMsg{}
+	}
+}
+
+func (m PostDetailModel) addBookmark() tea.Cmd {
+	return func() tea.Msg {
+		id, err := m.client.CreateBookmark(m.postID)
+		if err != nil {
+			return BookmarkAddErrorMsg{Err: err}
+		}
+		return BookmarkAddedMsg{BookmarkID: id}
+	}
 }
 
 func (m PostDetailModel) sendReply(content string) tea.Cmd {
@@ -447,18 +648,16 @@ func (m PostDetailModel) buildContent(width int) string {
 	} else if len(m.replies) == 0 {
 		b.WriteString(renderBox("REPLIES", "No replies yet", 40))
 	} else {
+		roots := buildReplyTree(m.replies)
 		var repliesContent strings.Builder
-		for i, reply := range m.replies {
-			repliesContent.WriteString(styles.Username.Render("@" + reply.AuthorUsername))
-			repliesContent.WriteString(styles.Dim.Render(" · " + TimeAgo(reply.CreatedAt)))
-			repliesContent.WriteString("\n")
-			repliesContent.WriteString(StripMarkdownKeepNewlines(reply.Content))
-			if i < len(m.replies)-1 {
-				repliesContent.WriteString("\n\n")
+		for i, root := range roots {
+			repliesContent.WriteString(renderReplyNode(root, 0, false, contentWidth))
+			if i < len(roots)-1 {
+				repliesContent.WriteString("\n")
 			}
 		}
 		replyTitle := fmt.Sprintf("REPLIES [%d]", len(m.replies))
-		b.WriteString(renderBox(replyTitle, repliesContent.String(), contentWidth))
+		b.WriteString(renderBox(replyTitle, strings.TrimRight(repliesContent.String(), "\n"), contentWidth))
 	}
 
 	return b.String()
@@ -531,11 +730,14 @@ func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
 	}
 }
 
+// Composing returns true when the reply textarea is active
+func (m PostDetailModel) Composing() bool { return m.composing }
+
 // SetSize updates the view dimensions
 func (m *PostDetailModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	vpHeight := height - headerHeight - footerHeight
+	vpHeight := height - headerHeight - footerHeight - hintHeight
 	if vpHeight < 1 {
 		vpHeight = 1
 	}

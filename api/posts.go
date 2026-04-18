@@ -138,6 +138,39 @@ func (c *Client) FetchPost(postID string) (*models.Post, error) {
 	return &resp.Data, nil
 }
 
+// createPostRequest is the request body for creating a post
+type createPostRequest struct {
+	Content  string   `json:"content"`
+	Topics   []string `json:"topics,omitempty"`
+	IsPublic bool     `json:"isPublic"`
+	IsNSFW   bool     `json:"isNSFW"`
+}
+
+// createPostResponse is the API response for creating a post
+type createPostResponse struct {
+	Data struct {
+		PostID string `json:"postId"`
+	} `json:"data"`
+}
+
+// CreatePost creates a new post
+func (c *Client) CreatePost(content string, topics []string) (string, error) {
+	body, err := c.doPost(c.BaseURL+"/v1/posts", createPostRequest{
+		Content: content,
+		Topics:  topics,
+	}, "failed to create post")
+	if err != nil {
+		return "", err
+	}
+
+	var result createPostResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	return result.Data.PostID, nil
+}
+
 // createReplyRequest is the request body for creating a reply
 type createReplyRequest struct {
 	PostID  string `json:"postId"`
@@ -167,6 +200,16 @@ func (c *Client) CreateReply(postID, content string) (string, error) {
 	}
 
 	return result.Data.ReplyID, nil
+}
+
+// DeletePost deletes a post by ID (must be the author)
+func (c *Client) DeletePost(postID string) error {
+	return c.doDelete(fmt.Sprintf("%s/v1/posts/%s", c.BaseURL, postID), "failed to delete post")
+}
+
+// DeleteReply deletes a reply by ID (must be the author)
+func (c *Client) DeleteReply(replyID string) error {
+	return c.doDelete(fmt.Sprintf("%s/v1/replies/%s", c.BaseURL, replyID), "failed to delete reply")
 }
 
 // FetchReplies retrieves replies for a post

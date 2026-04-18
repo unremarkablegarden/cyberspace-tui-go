@@ -6,6 +6,8 @@
 *.dylib
 bin/
 dist/
+cyberspace-cli
+cyberspace-tui-go
 
 # Test binary
 *.test
