@@ -1,0 +1,17 @@
+{
+  "name": "cybrcore",
+  "description": "Lucid theme for cyberspace-tui",
+  "author": "scherrer-txt",
+  "colors": {
+    "bright":     "#F24848",
+    "primary":    "#29BECC",
+    "normal":     "#F24848",
+    "dim":        "#393B42",
+    "muted":      "#29BECC",
+    "dark":       "#4D5A80",
+    "error":      "#F24848",
+    "bg_dark":    "#030408",
+    "bg_select":  "#05070D",
+    "highlight":  "#030408"
+  }
+}
