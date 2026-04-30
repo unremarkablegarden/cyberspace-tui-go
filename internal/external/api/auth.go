@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-// DefaultBaseURL is the default Cyberspace API base URL
-const DefaultBaseURL = "https://api.cyberspace.online"
-
-const userAgent = "cyberspace-cli/0.2"
-
 // httpClient is a shared HTTP client with a reasonable timeout
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 

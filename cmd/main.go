@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"fmt"
 	"log"
 	"os"
@@ -10,13 +9,56 @@ import (
 	"github.com/joho/godotenv"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/views"
 )
 
-//go:embed themes/*.json
-var themesFS embed.FS
+type MainModel struct {
+	ActiveModel tea.Model
+	CyberClient *api.Client
+	Config      appConfig
+}
+
+func (mm *MainModel) Init() tea.Cmd {
+	return tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+}
+
+func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.KeyMsg:
+	}
+
+	return mm, nil
+}
+
+func (mm *MainModel) View() string {
+	return ""
+}
+
+func NewMainModel() *MainModel {
+	mm := &MainModel{}
+
+	// 1. Load config
+	mm.loadConfig()
+
+	// 2. Load Theme
+	mm.loadTheme()
+
+	// 2. Load dependencies (client)
+	mm.loadDependencies()
+
+	// 3. Load Auth
+	mm.loadAuth()
+
+	// 4. Init whatever (login/feed)
+	if mm.Config.Auth.IDToken != "" && !mm.Config.Auth.IsExpired() {
+		mm.ActiveModel = views.NewFeedModel("", mm.Config.Auth.IDToken)
+	} else {
+		mm.ActiveModel = views.NewLoginModel("")
+	}
+
+	return mm
+}
 
 // AppState represents the current screen
 type AppState int
@@ -45,25 +87,25 @@ type Model struct {
 	loginModel         views.LoginModel
 	feedModel          views.FeedModel
 	postDetailModel    views.PostDetailModel
-	config             *Config
+	config             *appAuth
 	baseURL            string
 	width              int
 	height             int
 	showThemeSwitcher  bool
 	themeSwitcherModel views.ThemeSwitcherModel
 	composeModel       views.ComposeModel
-	bookmarksModel      views.BookmarksModel
-	notificationsModel  views.NotificationsModel
-	profileModel        views.ProfileModel
-	topicsModel         views.TopicsModel
-	topicFeedModel      views.TopicFeedModel
-	editProfileModel    views.EditProfileModel
-	notesModel          views.NotesModel
-	noteComposeModel    views.NoteComposeModel
-	returnState         AppState
+	bookmarksModel     views.BookmarksModel
+	notificationsModel views.NotificationsModel
+	profileModel       views.ProfileModel
+	topicsModel        views.TopicsModel
+	topicFeedModel     views.TopicFeedModel
+	editProfileModel   views.EditProfileModel
+	notesModel         views.NotesModel
+	noteComposeModel   views.NoteComposeModel
+	returnState        AppState
 }
 
-func initialModel(baseURL string, config *Config) Model {
+func initialModel(baseURL string, config *appAuth) Model {
 	m := Model{
 		baseURL: baseURL,
 		config:  config,
@@ -81,6 +123,7 @@ func initialModel(baseURL string, config *Config) Model {
 	return m
 }
 
+/******** DONE ********/
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 
@@ -143,7 +186,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.ThemeChangedMsg:
 		// Save theme preference
 		if m.config == nil {
-			m.config = &Config{}
+			m.config = &appAuth{}
 		}
 		m.config.Theme = msg.ThemeKey
 		if err := SaveConfig(m.config); err != nil {
@@ -196,8 +239,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-
-
 	case views.ThemeSwitcherClosedMsg:
 		m.showThemeSwitcher = false
 		return m, nil
@@ -226,7 +267,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Check if login succeeded
 		if loginMsg, ok := msg.(views.LoginSuccessMsg); ok {
-			m.config = &Config{
+			m.config = &appAuth{
 				IDToken:      loginMsg.IDToken,
 				RefreshToken: loginMsg.RefreshToken,
 			}
@@ -594,77 +635,19 @@ func fetchOwnUsernameCmd(baseURL, idToken string) tea.Cmd {
 	}
 }
 
-// refreshTokenIfNeeded checks if the token is expired and refreshes it
-func refreshTokenIfNeeded(config *Config, baseURL string) (*Config, error) {
-	if config == nil || config.RefreshToken == "" {
-		return config, nil
-	}
-
-	if !config.IsExpired() {
-		return config, nil
-	}
-
-	fmt.Println("Token expired, refreshing...")
-
-	client := api.NewClient(baseURL, "")
-	resp, err := client.RefreshToken(config.RefreshToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
-	}
-
-	config.IDToken = resp.IDToken
-	config.SetExpiry(DefaultTokenLifetimeSecs)
-
-	if err := SaveConfig(config); err != nil {
-		log.Printf("Warning: Failed to save refreshed config: %v", err)
-	}
-
-	fmt.Println("Token refreshed successfully!")
-	return config, nil
-}
-
 func main() {
 	// Load .env file (optional - won't fail if missing)
 	godotenv.Load()
 
-	// Use environment variable if set, otherwise use default
-	baseURL := os.Getenv("CYBERSPACE_API_URL")
-	if baseURL == "" {
-		baseURL = api.DefaultBaseURL
-	}
-
-	// Initialize theme system
-	styles.InitThemes(themesFS)
-
-	// Load existing config
-	config, err := LoadConfig()
-	if err != nil {
-		log.Printf("Warning: Failed to load config: %v", err)
-	}
-
-	// Try to refresh token if expired
-	if config != nil && config.RefreshToken != "" && config.IsExpired() {
-		config, err = refreshTokenIfNeeded(config, baseURL)
-		if err != nil {
-			// Refresh failed, will show login screen
-			log.Printf("Token refresh failed: %v", err)
-			config = nil
-		}
-	}
-
-	// Apply saved theme preference
-	if config != nil && config.Theme != "" {
-		if err := styles.ApplyTheme(config.Theme); err != nil {
-			log.Printf("Failed to apply theme %q: %v", config.Theme, err)
-		}
-	}
-
 	// Initialize mouse zone tracking
 	zone.NewGlobal()
 
+	// Init new main model
+	mm := NewMainModel()
+
 	// Create and run the app
 	p := tea.NewProgram(
-		initialModel(baseURL, config),
+		mm,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

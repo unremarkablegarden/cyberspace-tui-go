@@ -46,3 +46,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# vim
+*.vim

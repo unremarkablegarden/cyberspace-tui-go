@@ -1,6 +1,7 @@
 package styles
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -38,14 +39,15 @@ type ThemeDefinition struct {
 	Colors      ThemeColors `json:"colors"`
 }
 
+//go:embed themes/*.json
+var themesFS embed.FS
+
 var (
-	themesFS     fs.FS
 	currentTheme = "dark"
 )
 
 // InitThemes stores the embedded filesystem and applies the default theme styles.
 func InitThemes(f fs.FS) {
-	themesFS = f
 	rebuildStyles()
 }
 
@@ -56,10 +58,6 @@ func CurrentThemeName() string {
 
 // ListThemes returns all available theme definitions
 func ListThemes() []ThemeDefinition {
-	if themesFS == nil {
-		return nil
-	}
-
 	var themes []ThemeDefinition
 	entries, err := fs.ReadDir(themesFS, "themes")
 	if err != nil {
@@ -86,10 +84,6 @@ func ListThemes() []ThemeDefinition {
 
 // ApplyTheme loads a theme by filename (without .json extension) and applies it
 func ApplyTheme(name string) error {
-	if themesFS == nil {
-		return fmt.Errorf("themes not initialized")
-	}
-
 	data, err := fs.ReadFile(themesFS, "themes/"+name+".json")
 	if err != nil {
 		return fmt.Errorf("theme %q not found: %w", name, err)
@@ -391,7 +385,7 @@ func AlertBox(message string, alertType string, width int) string {
 		innerWidth = len(message) + 2
 	}
 
-	top := borderStyle.Render("┌─ ") + titleStyle.Render(icon) + borderStyle.Render(" " + strings.Repeat("─", innerWidth-len(icon)-2) + "┐")
+	top := borderStyle.Render("┌─ ") + titleStyle.Render(icon) + borderStyle.Render(" "+strings.Repeat("─", innerWidth-len(icon)-2)+"┐")
 	mid := borderStyle.Render("│ ") + lipgloss.NewStyle().Foreground(ColorNormal).Render(message) + strings.Repeat(" ", innerWidth-len(message)) + borderStyle.Render(" │")
 	bottom := borderStyle.Render("└" + strings.Repeat("─", innerWidth+2) + "┘")
 
@@ -438,4 +432,3 @@ func HelpStyles() help.Styles {
 		FullSeparator:  lipgloss.NewStyle().Foreground(ColorDark),
 	}
 }
-
