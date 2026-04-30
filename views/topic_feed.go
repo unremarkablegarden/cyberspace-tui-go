@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -51,7 +51,7 @@ type TopicFeedModel struct {
 	help        help.Model
 }
 
-func NewTopicFeedModel(baseURL, idToken string, topic models.Topic) TopicFeedModel {
+func NewTopicFeedModel(client *api.Client, topic models.Topic) TopicFeedModel {
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -72,7 +72,7 @@ func NewTopicFeedModel(baseURL, idToken string, topic models.Topic) TopicFeedMod
 	return TopicFeedModel{
 		topic:   topic,
 		list:    l,
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		spinner: NewSpinner(),
 		loading: true,
 		hasMore: true,

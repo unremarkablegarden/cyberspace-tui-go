@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -84,7 +84,7 @@ type EditProfileModel struct {
 }
 
 // NewEditProfileModel creates a new edit profile screen pre-populated with user data
-func NewEditProfileModel(baseURL, idToken string, user models.User) EditProfileModel {
+func NewEditProfileModel(client *api.Client, user models.User) EditProfileModel {
 	values := []string{
 		user.DisplayName,
 		user.Bio,
@@ -109,7 +109,7 @@ func NewEditProfileModel(baseURL, idToken string, user models.User) EditProfileM
 	h.Styles = styles.HelpStyles()
 
 	return EditProfileModel{
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		user:    user,
 		fields:  fields,
 		focused: 0,

@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -40,7 +40,7 @@ type NoteComposeModel struct {
 }
 
 // NewNoteComposeModel creates a note compose/edit screen
-func NewNoteComposeModel(baseURL, idToken string, note models.Note, isEdit bool) NoteComposeModel {
+func NewNoteComposeModel(client *api.Client, note models.Note, isEdit bool) NoteComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "Write your note..."
 	ta.SetHeight(10)
@@ -70,7 +70,7 @@ func NewNoteComposeModel(baseURL, idToken string, note models.Note, isEdit bool)
 	h.Styles = styles.HelpStyles()
 
 	return NoteComposeModel{
-		client:      api.NewClient(baseURL, idToken),
+		client:      client,
 		note:        note,
 		isEdit:      isEdit,
 		content:     ta,

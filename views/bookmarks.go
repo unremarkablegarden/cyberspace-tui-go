@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -60,7 +60,7 @@ type BookmarksModel struct {
 }
 
 // NewBookmarksModel creates a new bookmarks screen
-func NewBookmarksModel(baseURL, idToken string) BookmarksModel {
+func NewBookmarksModel(client *api.Client) BookmarksModel {
 	delegate := BookmarkDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -80,7 +80,7 @@ func NewBookmarksModel(baseURL, idToken string) BookmarksModel {
 
 	return BookmarksModel{
 		list:    l,
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		spinner: NewSpinner(),
 		loading: true,
 		hasMore: true,

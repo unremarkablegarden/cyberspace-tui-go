@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -45,7 +45,7 @@ func (t TopicItem) Description() string {
 type TopicDelegate struct{}
 
 func (d TopicDelegate) Height() int                             { return 3 }
-func (d TopicDelegate) Spacing() int                           { return 0 }
+func (d TopicDelegate) Spacing() int                            { return 0 }
 func (d TopicDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
 func (d TopicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -90,7 +90,7 @@ type TopicsModel struct {
 	help    help.Model
 }
 
-func NewTopicsModel(baseURL, idToken string) TopicsModel {
+func NewTopicsModel(client *api.Client) TopicsModel {
 	delegate := TopicDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -110,7 +110,7 @@ func NewTopicsModel(baseURL, idToken string) TopicsModel {
 
 	return TopicsModel{
 		list:    l,
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		spinner: NewSpinner(),
 		loading: true,
 		keys:    NewTopicsKeyMap(),

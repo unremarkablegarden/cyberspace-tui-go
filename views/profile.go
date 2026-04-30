@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -81,7 +81,7 @@ type ProfileModel struct {
 }
 
 // NewProfileModel creates a new profile screen for the given username
-func NewProfileModel(baseURL, idToken, username, currentUsername string) ProfileModel {
+func NewProfileModel(client *api.Client, username, currentUsername string) ProfileModel {
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -106,7 +106,7 @@ func NewProfileModel(baseURL, idToken, username, currentUsername string) Profile
 		currentUsername: currentUsername,
 		isOwnProfile:    isOwn,
 		list:            l,
-		client:          api.NewClient(baseURL, idToken),
+		client:          client,
 		spinner:         NewSpinner(),
 		loading:         true,
 		keys:            NewProfileKeyMap(),
@@ -309,7 +309,7 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 
 	// Member since
 	if !m.user.CreatedAt.IsZero() {
-		content.WriteString(styles.Dim.Render("joined " + m.user.CreatedAt.Format("Jan 2006")) + "\n")
+		content.WriteString(styles.Dim.Render("joined "+m.user.CreatedAt.Format("Jan 2006")) + "\n")
 	}
 
 	// Bio
@@ -324,12 +324,12 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 		if label == "" {
 			label = m.user.WebsiteURL
 		}
-		content.WriteString(styles.Dim.Render("⬡ " + label) + "\n")
+		content.WriteString(styles.Dim.Render("⬡ "+label) + "\n")
 	}
 
 	// Location
 	if m.user.LocationName != "" {
-		content.WriteString(styles.Dim.Render("⌖ " + m.user.LocationName) + "\n")
+		content.WriteString(styles.Dim.Render("⌖ "+m.user.LocationName) + "\n")
 	}
 
 	// Follow status / edit button

@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -112,7 +112,7 @@ type NotesModel struct {
 }
 
 // NewNotesModel creates a new notes list screen
-func NewNotesModel(baseURL, idToken string) NotesModel {
+func NewNotesModel(client *api.Client) NotesModel {
 	l := list.New([]list.Item{}, noteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -131,7 +131,7 @@ func NewNotesModel(baseURL, idToken string) NotesModel {
 
 	return NotesModel{
 		list:    l,
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		spinner: NewSpinner(),
 		loading: true,
 		keys:    NewNotesKeyMap(),

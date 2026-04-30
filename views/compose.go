@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -27,8 +27,8 @@ type ComposeBackMsg struct{}
 
 // ComposeKeyMap defines keybindings for the compose screen
 type ComposeKeyMap struct {
-	Send       key.Binding
-	Cancel     key.Binding
+	Send        key.Binding
+	Cancel      key.Binding
 	SwitchField key.Binding
 }
 
@@ -76,7 +76,7 @@ type ComposeModel struct {
 }
 
 // NewComposeModel creates a new compose screen
-func NewComposeModel(baseURL, idToken string) ComposeModel {
+func NewComposeModel(client *api.Client) ComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "What's on your mind?"
 	ta.SetHeight(8)
@@ -100,7 +100,7 @@ func NewComposeModel(baseURL, idToken string) ComposeModel {
 	h.Styles = styles.HelpStyles()
 
 	return ComposeModel{
-		client:      api.NewClient(baseURL, idToken),
+		client:      client,
 		content:     ta,
 		topicsInput: ti,
 		focused:     "content",

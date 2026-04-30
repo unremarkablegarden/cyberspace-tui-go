@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -57,30 +57,30 @@ type postDeleteErrMsg struct{ Err error }
 
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
-	post            models.Post
-	replies         []models.Reply
-	loading         bool
-	spinner         spinner.Model
-	err             error
-	client          *api.Client
-	postID          string
-	currentUsername string
-	width           int
-	height          int
-	keys            PostDetailKeyMap
-	help            help.Model
-	viewport        viewport.Model
-	ready           bool // true once we've received a WindowSizeMsg
-	replyInput      textarea.Model
-	composing       bool
-	replySending    bool
-	replyErr        error
-	bookmarking     bool
-	bookmarked      bool
-	bookmarkErr     error
+	post             models.Post
+	replies          []models.Reply
+	loading          bool
+	spinner          spinner.Model
+	err              error
+	client           *api.Client
+	postID           string
+	currentUsername  string
+	width            int
+	height           int
+	keys             PostDetailKeyMap
+	help             help.Model
+	viewport         viewport.Model
+	ready            bool // true once we've received a WindowSizeMsg
+	replyInput       textarea.Model
+	composing        bool
+	replySending     bool
+	replyErr         error
+	bookmarking      bool
+	bookmarked       bool
+	bookmarkErr      error
 	confirmingDelete bool
-	deleting        bool
-	deleteErr       error
+	deleting         bool
+	deleteErr        error
 }
 
 func newReplyTextarea() textarea.Model {
@@ -112,11 +112,11 @@ func newDetailViewport() viewport.Model {
 }
 
 // NewPostDetailModel creates a new post detail screen
-func NewPostDetailModel(baseURL, idToken, postID, currentUsername string) PostDetailModel {
+func NewPostDetailModel(client *api.Client, postID, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	return PostDetailModel{
-		client:          api.NewClient(baseURL, idToken),
+		client:          client,
 		postID:          postID,
 		currentUsername: currentUsername,
 		spinner:         NewSpinner(),
@@ -129,12 +129,12 @@ func NewPostDetailModel(baseURL, idToken, postID, currentUsername string) PostDe
 }
 
 // NewPostDetailModelWithPost creates a detail screen with post already loaded
-func NewPostDetailModelWithPost(baseURL, idToken string, post models.Post, currentUsername string) PostDetailModel {
+func NewPostDetailModelWithPost(client *api.Client, post models.Post, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
 	m := PostDetailModel{
-		client:          api.NewClient(baseURL, idToken),
+		client:          client,
 		postID:          post.ID,
 		post:            post,
 		currentUsername: currentUsername,

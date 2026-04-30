@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -31,7 +31,7 @@ type LoginModel struct {
 	focusIndex    int
 	loading       bool
 	err           error
-	baseURL       string
+	client        *api.Client
 	width         int
 	height        int
 	keys          LoginKeyMap
@@ -39,7 +39,7 @@ type LoginModel struct {
 }
 
 // NewLoginModel creates a new login screen
-func NewLoginModel(baseURL string) LoginModel {
+func NewLoginModel(client *api.Client) LoginModel {
 	ei := textinput.New()
 	ei.Placeholder = "user@network.net"
 	ei.Focus()
@@ -63,7 +63,7 @@ func NewLoginModel(baseURL string) LoginModel {
 		emailInput:    ei,
 		passwordInput: pi,
 		focusIndex:    0,
-		baseURL:       baseURL,
+		client:        client,
 		keys:          NewLoginKeyMap(),
 		help:          h,
 	}
@@ -259,8 +259,7 @@ func (m *LoginModel) updateFocus() tea.Cmd {
 
 func (m LoginModel) attemptLogin() tea.Cmd {
 	return func() tea.Msg {
-		client := api.NewClient(m.baseURL, "")
-		resp, err := client.SignIn(m.emailInput.Value(), m.passwordInput.Value())
+		resp, err := m.client.SignIn(m.emailInput.Value(), m.passwordInput.Value())
 		if err != nil {
 			return LoginErrorMsg{Err: err}
 		}

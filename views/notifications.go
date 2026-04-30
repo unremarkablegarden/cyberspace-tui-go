@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -53,7 +53,7 @@ type NotificationsModel struct {
 }
 
 // NewNotificationsModel creates a new notifications screen
-func NewNotificationsModel(baseURL, idToken string) NotificationsModel {
+func NewNotificationsModel(client *api.Client) NotificationsModel {
 	delegate := NotificationDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -73,7 +73,7 @@ func NewNotificationsModel(baseURL, idToken string) NotificationsModel {
 
 	return NotificationsModel{
 		list:    l,
-		client:  api.NewClient(baseURL, idToken),
+		client:  client,
 		spinner: NewSpinner(),
 		loading: true,
 		hasMore: true,

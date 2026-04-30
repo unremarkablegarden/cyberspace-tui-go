@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
@@ -65,12 +65,12 @@ type FeedModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys FeedKeyMap
-	help help.Model
+	keys        FeedKeyMap
+	help        help.Model
 }
 
 // NewFeedModel creates a new feed screen
-func NewFeedModel(baseURL, idToken string) FeedModel {
+func NewFeedModel(client *api.Client) FeedModel {
 	// Create list with custom delegate
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -95,13 +95,13 @@ func NewFeedModel(baseURL, idToken string) FeedModel {
 	h.Styles = styles.HelpStyles()
 
 	return FeedModel{
-		list:     l,
-		client:   api.NewClient(baseURL, idToken),
-		spinner:  NewSpinner(),
-		loading:  true,
-		hasMore:  true,
-		keys: NewFeedKeyMap(),
-		help: h,
+		list:    l,
+		client:  client,
+		spinner: NewSpinner(),
+		loading: true,
+		hasMore: true,
+		keys:    NewFeedKeyMap(),
+		help:    h,
 	}
 }
 
