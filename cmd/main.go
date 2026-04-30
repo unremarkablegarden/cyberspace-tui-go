@@ -10,6 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/views"
 )
 
@@ -24,8 +25,35 @@ func (mm *MainModel) Init() tea.Cmd {
 }
 
 func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
+	// System messages
+	case tea.WindowSizeMsg:
+
+	// Global keys supported
 	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return mm, tea.Quit
+		case "m":
+			// open menu
+			return mm, nil
+		}
+
+		// Switch views stuff
+	case messages.SwitchToFeed:
+		feedModel := views.NewFeedModel("", "")
+		mm.ActiveModel = feedModel
+		return mm, mm.ActiveModel.Init()
+
+	case messages.SwitchToPost:
+	case messages.SwitchToNotifications:
+	case messages.SwitchToThemePicker:
+
+		// Send message to active model to handle it there
+	default:
+		updatedModel, command := mm.ActiveModel.Update(msg)
+		mm.ActiveModel = updatedModel
+		return mm, command
 	}
 
 	return mm, nil
