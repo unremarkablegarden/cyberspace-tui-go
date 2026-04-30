@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -25,7 +25,7 @@ type noteSaveErrorMsg struct{ Err error }
 // NoteComposeModel is the note create/edit screen
 type NoteComposeModel struct {
 	client      *api.Client
-	note        models.Note // empty ID = new note
+	note        entities.Note // empty ID = new note
 	isEdit      bool
 	content     textarea.Model
 	topicsInput textinput.Model
@@ -40,7 +40,7 @@ type NoteComposeModel struct {
 }
 
 // NewNoteComposeModel creates a note compose/edit screen
-func NewNoteComposeModel(client *api.Client, note models.Note, isEdit bool) NoteComposeModel {
+func NewNoteComposeModel(client *api.Client, note entities.Note, isEdit bool) NoteComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "Write your note..."
 	ta.SetHeight(10)

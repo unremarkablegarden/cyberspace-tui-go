@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"strings"
@@ -10,20 +10,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // NotificationsLoadedMsg is sent when notifications are fetched
 type NotificationsLoadedMsg struct {
-	Notifications []models.Notification
+	Notifications []entities.Notification
 	Cursor        string
 }
 
 // MoreNotificationsLoadedMsg is sent when more notifications are loaded
 type MoreNotificationsLoadedMsg struct {
-	Notifications []models.Notification
+	Notifications []entities.Notification
 	Cursor        string
 }
 
@@ -301,7 +301,7 @@ func (m NotificationsModel) markAllRead() tea.Cmd {
 	}
 }
 
-func notificationsToItems(notifs []models.Notification) []list.Item {
+func notificationsToItems(notifs []entities.Notification) []list.Item {
 	items := make([]list.Item, len(notifs))
 	for i, n := range notifs {
 		items[i] = NotificationItem{Notification: n}

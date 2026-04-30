@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -9,13 +9,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // NotificationItem wraps a Notification for the list bubble
 type NotificationItem struct {
-	Notification models.Notification
+	Notification entities.Notification
 }
 
 func (n NotificationItem) FilterValue() string {
@@ -50,7 +50,7 @@ func (d NotificationDelegate) Render(w io.Writer, m list.Model, index int, item 
 	}
 }
 
-func renderNotificationCard(n models.Notification, selected bool, width int) string {
+func renderNotificationCard(n entities.Notification, selected bool, width int) string {
 	innerWidth := width - 4
 	if innerWidth < 20 {
 		innerWidth = 76
@@ -88,7 +88,7 @@ func renderNotificationCard(n models.Notification, selected bool, width int) str
 	return buildCardBox(boxContent.String(), innerWidth, selected)
 }
 
-func notificationSummary(n models.Notification) string {
+func notificationSummary(n entities.Notification) string {
 	actor := "@" + n.ActorUsername
 	switch n.Type {
 	case "reply":

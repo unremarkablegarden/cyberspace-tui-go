@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -10,17 +10,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// POST ITEM — wraps models.Post for the list bubble
+// POST ITEM — wraps entities.Post for the list bubble
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // PostItem wraps a Post so it satisfies list.Item.
 type PostItem struct {
-	Post models.Post
+	Post entities.Post
 }
 
 func (p PostItem) FilterValue() string {
@@ -71,7 +71,7 @@ func (d PostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 // CARD RENDERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func renderPostCard(p models.Post, selected bool, width int) string {
+func renderPostCard(p entities.Post, selected bool, width int) string {
 	innerWidth := width - 4
 	if innerWidth < 20 {
 		innerWidth = 76

@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"strings"
@@ -11,20 +11,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // PostsLoadedMsg is sent when posts are fetched
 type PostsLoadedMsg struct {
-	Posts  []models.Post
+	Posts  []entities.Post
 	Cursor string
 }
 
 // MorePostsLoadedMsg is sent when more posts are loaded
 type MorePostsLoadedMsg struct {
-	Posts  []models.Post
+	Posts  []entities.Post
 	Cursor string
 }
 
@@ -35,7 +35,7 @@ type PostsErrorMsg struct {
 
 // OpenPostMsg is sent when user wants to view a post
 type OpenPostMsg struct {
-	Post models.Post
+	Post entities.Post
 }
 
 // OpenComposeMsg is sent when the user wants to create a new post
@@ -350,7 +350,7 @@ func (m FeedModel) fetchMorePosts() tea.Cmd {
 	}
 }
 
-func postsToItems(posts []models.Post) []list.Item {
+func postsToItems(posts []entities.Post) []list.Item {
 	items := make([]list.Item, len(posts))
 	for i, p := range posts {
 		items[i] = PostItem{Post: p}

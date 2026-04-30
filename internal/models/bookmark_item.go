@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -9,13 +9,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // BookmarkItem wraps a Bookmark for the list bubble
 type BookmarkItem struct {
-	Bookmark models.Bookmark
+	Bookmark entities.Bookmark
 }
 
 func (b BookmarkItem) FilterValue() string {
@@ -50,7 +50,7 @@ func (d BookmarkDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 }
 
-func renderBookmarkCard(b models.Bookmark, selected bool, width int) string {
+func renderBookmarkCard(b entities.Bookmark, selected bool, width int) string {
 	p := b.Post
 	innerWidth := width - 4
 	if innerWidth < 20 {

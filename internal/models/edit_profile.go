@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -11,13 +11,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // OpenEditProfileMsg is sent to open the edit profile screen
-type OpenEditProfileMsg struct{ User models.User }
+type OpenEditProfileMsg struct{ User entities.User }
 
 // EditProfileDoneMsg is sent when the edit profile screen closes
 type EditProfileDoneMsg struct{ Saved bool }
@@ -71,7 +71,7 @@ var editFieldLimits = []int{64, 127, 64, 2048, 64}
 // EditProfileModel is the edit profile form screen
 type EditProfileModel struct {
 	client  *api.Client
-	user    models.User
+	user    entities.User
 	fields  []textinput.Model
 	focused int
 	saving  bool
@@ -84,7 +84,7 @@ type EditProfileModel struct {
 }
 
 // NewEditProfileModel creates a new edit profile screen pre-populated with user data
-func NewEditProfileModel(client *api.Client, user models.User) EditProfileModel {
+func NewEditProfileModel(client *api.Client, user entities.User) EditProfileModel {
 	values := []string{
 		user.DisplayName,
 		user.Bio,

@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -21,20 +21,20 @@ import (
 type OpenTopicsMsg struct{}
 
 // OpenTopicFeedMsg is sent when the user selects a topic
-type OpenTopicFeedMsg struct{ Topic models.Topic }
+type OpenTopicFeedMsg struct{ Topic entities.Topic }
 
 // BackFromTopicsMsg is sent when navigating back from topics
 type BackFromTopicsMsg struct{}
 
 // TopicsLoadedMsg is sent when topics are fetched
-type TopicsLoadedMsg struct{ Topics []models.Topic }
+type TopicsLoadedMsg struct{ Topics []entities.Topic }
 
 // TopicsErrorMsg is sent when fetching topics fails
 type TopicsErrorMsg struct{ Err error }
 
 // ─── Topic list item ────────────────────────────────────────────────────────
 
-type TopicItem struct{ Topic models.Topic }
+type TopicItem struct{ Topic entities.Topic }
 
 func (t TopicItem) FilterValue() string { return t.Topic.Name }
 func (t TopicItem) Title() string       { return "[" + t.Topic.Name + "]" }
@@ -58,7 +58,7 @@ func (d TopicDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	fmt.Fprint(w, renderTopicCard(it.Topic, selected, width))
 }
 
-func renderTopicCard(t models.Topic, selected bool, width int) string {
+func renderTopicCard(t entities.Topic, selected bool, width int) string {
 	innerWidth := width - 4
 	if innerWidth < 20 {
 		innerWidth = 76

@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -22,14 +22,14 @@ type OpenProfileMsg struct{ Username string }
 
 // ProfileLoadedMsg is sent when a user's profile and posts are fetched
 type ProfileLoadedMsg struct {
-	User   models.User
-	Posts  []models.Post
+	User   entities.User
+	Posts  []entities.Post
 	Cursor string
 }
 
 // MoreProfilePostsLoadedMsg is sent when more posts are loaded
 type MoreProfilePostsLoadedMsg struct {
-	Posts  []models.Post
+	Posts  []entities.Post
 	Cursor string
 }
 
@@ -60,7 +60,7 @@ type ProfileModel struct {
 	username        string
 	currentUsername string
 	isOwnProfile    bool
-	user            models.User
+	user            entities.User
 	list            list.Model
 	loading         bool
 	loadingMore     bool

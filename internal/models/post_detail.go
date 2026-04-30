@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -23,8 +23,8 @@ const hintHeight = 1   // contextual actions hint line
 
 // PostDetailLoadedMsg is sent when post and replies are loaded
 type PostDetailLoadedMsg struct {
-	Post    models.Post
-	Replies []models.Reply
+	Post    entities.Post
+	Replies []entities.Reply
 }
 
 // PostDetailErrorMsg is sent when loading fails
@@ -57,8 +57,8 @@ type postDeleteErrMsg struct{ Err error }
 
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
-	post             models.Post
-	replies          []models.Reply
+	post             entities.Post
+	replies          []entities.Reply
 	loading          bool
 	spinner          spinner.Model
 	err              error
@@ -129,7 +129,7 @@ func NewPostDetailModel(client *api.Client, postID, currentUsername string) Post
 }
 
 // NewPostDetailModelWithPost creates a detail screen with post already loaded
-func NewPostDetailModelWithPost(client *api.Client, post models.Post, currentUsername string) PostDetailModel {
+func NewPostDetailModelWithPost(client *api.Client, post entities.Post, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
@@ -486,12 +486,12 @@ func (m PostDetailModel) renderHints(width int) string {
 
 // replyNode is a node in the reply tree
 type replyNode struct {
-	Reply    models.Reply
+	Reply    entities.Reply
 	Children []*replyNode
 }
 
 // buildReplyTree organises a flat reply list into a tree using ParentReplyID
-func buildReplyTree(replies []models.Reply) []*replyNode {
+func buildReplyTree(replies []entities.Reply) []*replyNode {
 	nodes := make(map[string]*replyNode, len(replies))
 	for i := range replies {
 		nodes[replies[i].ID] = &replyNode{Reply: replies[i]}

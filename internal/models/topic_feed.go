@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"strings"
@@ -11,20 +11,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // TopicPostsLoadedMsg is sent when posts for a topic are fetched
 type TopicPostsLoadedMsg struct {
-	Posts  []models.Post
+	Posts  []entities.Post
 	Cursor string
 }
 
 // MoreTopicPostsLoadedMsg is sent when more topic posts are loaded
 type MoreTopicPostsLoadedMsg struct {
-	Posts  []models.Post
+	Posts  []entities.Post
 	Cursor string
 }
 
@@ -36,7 +36,7 @@ type BackFromTopicFeedMsg struct{}
 
 // TopicFeedModel is the topic-filtered post feed screen
 type TopicFeedModel struct {
-	topic       models.Topic
+	topic       entities.Topic
 	list        list.Model
 	loading     bool
 	loadingMore bool
@@ -51,7 +51,7 @@ type TopicFeedModel struct {
 	help        help.Model
 }
 
-func NewTopicFeedModel(client *api.Client, topic models.Topic) TopicFeedModel {
+func NewTopicFeedModel(client *api.Client, topic entities.Topic) TopicFeedModel {
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)

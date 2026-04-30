@@ -1,4 +1,4 @@
-package models
+package entities
 
 // Topic represents a Cyberspace topic/tag
 type Topic struct {

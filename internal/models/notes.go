@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"fmt"
@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -26,17 +26,17 @@ type BackFromNotesMsg struct{}
 
 // OpenNoteComposeMsg is sent to open the note compose/edit screen
 type OpenNoteComposeMsg struct {
-	Note   models.Note
+	Note   entities.Note
 	IsEdit bool
 }
 
 type notesLoadedMsg struct {
-	Notes  []models.Note
+	Notes  []entities.Note
 	Cursor string
 }
 
 type moreNotesLoadedMsg struct {
-	Notes  []models.Note
+	Notes  []entities.Note
 	Cursor string
 }
 
@@ -46,7 +46,7 @@ type noteDeletedMsg struct{ NoteID string }
 type noteDeleteErrMsg struct{ Err error }
 
 // NoteItem implements list.Item for notes
-type NoteItem struct{ Note models.Note }
+type NoteItem struct{ Note entities.Note }
 
 func (n NoteItem) FilterValue() string { return n.Note.Content }
 func (n NoteItem) Title() string       { return n.Note.Content }
@@ -379,7 +379,7 @@ func (m NotesModel) deleteNote(noteID string) tea.Cmd {
 	}
 }
 
-func notesToItems(notes []models.Note) []list.Item {
+func notesToItems(notes []entities.Note) []list.Item {
 	items := make([]list.Item, len(notes))
 	for i, n := range notes {
 		items[i] = NoteItem{Note: n}

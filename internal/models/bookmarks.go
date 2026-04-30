@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"strings"
@@ -11,20 +11,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // BookmarksLoadedMsg is sent when bookmarks are fetched
 type BookmarksLoadedMsg struct {
-	Bookmarks []models.Bookmark
+	Bookmarks []entities.Bookmark
 	Cursor    string
 }
 
 // MoreBookmarksLoadedMsg is sent when more bookmarks are loaded
 type MoreBookmarksLoadedMsg struct {
-	Bookmarks []models.Bookmark
+	Bookmarks []entities.Bookmark
 	Cursor    string
 }
 
@@ -32,7 +32,7 @@ type MoreBookmarksLoadedMsg struct {
 type BookmarksErrorMsg struct{ Err error }
 
 // OpenPostFromBookmarksMsg is sent when opening a post from the bookmarks list
-type OpenPostFromBookmarksMsg struct{ Post models.Post }
+type OpenPostFromBookmarksMsg struct{ Post entities.Post }
 
 // BackToFeedFromBookmarksMsg is sent when navigating back from bookmarks
 type BackToFeedFromBookmarksMsg struct{}
@@ -317,7 +317,7 @@ func (m BookmarksModel) deleteBookmark(bookmarkID string) tea.Cmd {
 	}
 }
 
-func bookmarksToItems(bookmarks []models.Bookmark) []list.Item {
+func bookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
 	items := make([]list.Item, 0, len(bookmarks))
 	for _, b := range bookmarks {
 		if !b.Post.Deleted {

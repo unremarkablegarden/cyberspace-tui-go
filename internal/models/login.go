@@ -1,4 +1,4 @@
-package views
+package models
 
 import (
 	"strings"
