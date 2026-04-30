@@ -10,13 +10,13 @@ import (
 
 // FeedKeyMap defines keybindings for the feed view.
 type FeedKeyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Top     key.Binding
-	Bottom  key.Binding
-	Open    key.Binding
-	Refresh key.Binding
-	Theme   key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	Top           key.Binding
+	Bottom        key.Binding
+	Open          key.Binding
+	Refresh       key.Binding
+	Theme         key.Binding
 	Logout        key.Binding
 	NewPost       key.Binding
 	Bookmarks     key.Binding
@@ -128,12 +128,12 @@ type PostDetailKeyMap struct {
 	Bottom   key.Binding
 	Back     key.Binding
 	Refresh  key.Binding
-	Reply   key.Binding
-	Send    key.Binding
-	Save    key.Binding
-	Delete  key.Binding
-	Profile key.Binding
-	Theme   key.Binding
+	Reply    key.Binding
+	Send     key.Binding
+	Save     key.Binding
+	Delete   key.Binding
+	Profile  key.Binding
+	Theme    key.Binding
 	Help     key.Binding
 	Quit     key.Binding
 }

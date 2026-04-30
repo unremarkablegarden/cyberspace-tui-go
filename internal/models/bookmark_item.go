@@ -23,8 +23,10 @@ func (b BookmarkItem) FilterValue() string {
 	return p.AuthorUsername + " " + p.Content + " " + strings.Join(p.Topics, " ")
 }
 
-func (b BookmarkItem) Title() string       { return "@" + b.Bookmark.Post.AuthorUsername }
-func (b BookmarkItem) Description() string { return Truncate(StripMarkdown(b.Bookmark.Post.Content), 80) }
+func (b BookmarkItem) Title() string { return "@" + b.Bookmark.Post.AuthorUsername }
+func (b BookmarkItem) Description() string {
+	return Truncate(StripMarkdown(b.Bookmark.Post.Content), 80)
+}
 
 // BookmarkDelegate renders bookmark items as styled cards
 type BookmarkDelegate struct{}

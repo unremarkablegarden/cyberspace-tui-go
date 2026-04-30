@@ -22,12 +22,12 @@ type ThemeSwitcherClosedMsg struct{}
 
 // ThemeSwitcherModel is the popup modal for switching themes
 type ThemeSwitcherModel struct {
-	themes       []styles.ThemeDefinition
-	cursor       int
-	width        int
-	height       int
-	keys         ThemeSwitcherKeyMap
-	help         help.Model
+	themes        []styles.ThemeDefinition
+	cursor        int
+	width         int
+	height        int
+	keys          ThemeSwitcherKeyMap
+	help          help.Model
 	originalTheme string // theme active when switcher was opened, for reverting on ESC
 }
 

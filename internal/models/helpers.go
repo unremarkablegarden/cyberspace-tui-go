@@ -86,17 +86,17 @@ func wrapText(text string, width int) []string {
 }
 
 var (
-	reLink       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
-	reBold       = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	reBoldUndsc  = regexp.MustCompile(`__(.+?)__`)
-	reItalic     = regexp.MustCompile(`\*(.+?)\*`)
-	reItalUndsc  = regexp.MustCompile(`\b_(.+?)_\b`)
-	reCode       = regexp.MustCompile("`([^`]+)`")
-	reHeading    = regexp.MustCompile(`(?m)^#{1,6}\s+`)
-	reCodeBlock    = regexp.MustCompile("(?s)```[a-z]*\n?(.*?)```")
-	reNbspLine     = regexp.MustCompile(`(?m)^[ \t]*&nbsp;[ \t]*$`)
-	reNbspUniLine  = regexp.MustCompile("(?m)^[ \t]*\u00A0[ \t]*$")
-	reMultiBlank   = regexp.MustCompile(`\n{3,}`)
+	reLink        = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	reBold        = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	reBoldUndsc   = regexp.MustCompile(`__(.+?)__`)
+	reItalic      = regexp.MustCompile(`\*(.+?)\*`)
+	reItalUndsc   = regexp.MustCompile(`\b_(.+?)_\b`)
+	reCode        = regexp.MustCompile("`([^`]+)`")
+	reHeading     = regexp.MustCompile(`(?m)^#{1,6}\s+`)
+	reCodeBlock   = regexp.MustCompile("(?s)```[a-z]*\n?(.*?)```")
+	reNbspLine    = regexp.MustCompile(`(?m)^[ \t]*&nbsp;[ \t]*$`)
+	reNbspUniLine = regexp.MustCompile("(?m)^[ \t]*\u00A0[ \t]*$")
+	reMultiBlank  = regexp.MustCompile(`\n{3,}`)
 )
 
 // cleanContent removes &nbsp;-only lines and collapses excessive blank lines,

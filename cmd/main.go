@@ -41,7 +41,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Switch views stuff
 	case messages.SwitchToFeed:
-		feedModel := views.NewFeedModel("", "")
+		feedModel := views.NewFeedModel(mm.CyberClient)
 		mm.ActiveModel = feedModel
 		return mm, mm.ActiveModel.Init()
 
