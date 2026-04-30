@@ -25,10 +25,7 @@ func (mm *MainModel) Init() tea.Cmd {
 
 func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	// System messages
-	case tea.WindowSizeMsg:
-
-	// Global keys supported
+	// Keys supported
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -36,14 +33,19 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			// open menu
 			return mm, nil
+			// Navigation or other stuff by keypressing
+			// send it to the active model
+		default:
+			updatedModel, command := mm.ActiveModel.Update(msg)
+			mm.ActiveModel = updatedModel
+			return mm, command
 		}
 
-		// Switch models.stuff
+		// Switch models stuff
 	case messages.SwitchToFeed:
 		feedModel := models.NewFeedModel(mm.CyberClient)
 		mm.ActiveModel = feedModel
 		return mm, mm.ActiveModel.Init()
-
 	case messages.SwitchToPost:
 	case messages.SwitchToNotifications:
 	case messages.SwitchToThemePicker:
@@ -59,7 +61,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (mm *MainModel) View() string {
-	return mm.ActiveModel.View()
+	return zone.Scan(mm.ActiveModel.View())
 }
 
 func NewMainModel() *MainModel {
@@ -586,6 +588,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+/****** DONE ******/
 func (m Model) View() string {
 	var v string
 	if m.showThemeSwitcher {
