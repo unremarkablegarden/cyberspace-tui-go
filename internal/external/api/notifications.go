@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 )
 
 type notificationsResponse struct {
-	Data   []models.Notification `json:"data"`
-	Cursor *string               `json:"cursor"`
+	Data   []entities.Notification `json:"data"`
+	Cursor *string                 `json:"cursor"`
 }
 
 // FetchNotifications retrieves the user's notifications
-func (c *Client) FetchNotifications(limit int) ([]models.Notification, string, error) {
+func (c *Client) FetchNotifications(limit int) ([]entities.Notification, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/notifications?limit=%d", c.BaseURL, limit)
 
 	body, err := c.doGet(reqURL)
@@ -35,7 +35,7 @@ func (c *Client) FetchNotifications(limit int) ([]models.Notification, string, e
 }
 
 // FetchMoreNotifications retrieves the next page of notifications
-func (c *Client) FetchMoreNotifications(limit int, cursor string) ([]models.Notification, string, error) {
+func (c *Client) FetchMoreNotifications(limit int, cursor string) ([]entities.Notification, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/notifications?limit=%d&cursor=%s", c.BaseURL, limit, url.QueryEscape(cursor))
 
 	body, err := c.doGet(reqURL)

@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 )
 
 type userResponse struct {
-	Data models.User `json:"data"`
+	Data entities.User `json:"data"`
 }
 
 type userPostsResponse struct {
-	Data   []models.Post `json:"data"`
-	Cursor *string       `json:"cursor"`
+	Data   []entities.Post `json:"data"`
+	Cursor *string         `json:"cursor"`
 }
 
 // FetchOwnProfile retrieves the current user's own profile
-func (c *Client) FetchOwnProfile() (*models.User, error) {
+func (c *Client) FetchOwnProfile() (*entities.User, error) {
 	body, err := c.doGet(fmt.Sprintf("%s/v1/users/me", c.BaseURL))
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (c *Client) UpdateProfile(req UpdateProfileRequest) error {
 }
 
 // FetchUser retrieves a user's profile by username
-func (c *Client) FetchUser(username string) (*models.User, error) {
+func (c *Client) FetchUser(username string) (*entities.User, error) {
 	reqURL := fmt.Sprintf("%s/v1/users/%s", c.BaseURL, url.PathEscape(username))
 
 	body, err := c.doGet(reqURL)
@@ -63,7 +63,7 @@ func (c *Client) FetchUser(username string) (*models.User, error) {
 }
 
 // FetchUserPosts retrieves posts by a specific user
-func (c *Client) FetchUserPosts(username string, limit int) ([]models.Post, string, error) {
+func (c *Client) FetchUserPosts(username string, limit int) ([]entities.Post, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/users/%s/posts?limit=%d", c.BaseURL, url.PathEscape(username), limit)
 
 	body, err := c.doGet(reqURL)
@@ -84,7 +84,7 @@ func (c *Client) FetchUserPosts(username string, limit int) ([]models.Post, stri
 }
 
 // FetchMoreUserPosts retrieves the next page of posts by a user
-func (c *Client) FetchMoreUserPosts(username string, limit int, cursor string) ([]models.Post, string, error) {
+func (c *Client) FetchMoreUserPosts(username string, limit int, cursor string) ([]entities.Post, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/users/%s/posts?limit=%d&cursor=%s", c.BaseURL, url.PathEscape(username), limit, url.QueryEscape(cursor))
 
 	body, err := c.doGet(reqURL)

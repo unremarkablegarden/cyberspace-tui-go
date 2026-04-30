@@ -6,29 +6,29 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 )
 
 // postsResponse is the API response for listing posts
 type postsResponse struct {
-	Data   []models.Post `json:"data"`
-	Cursor *string       `json:"cursor"`
+	Data   []entities.Post `json:"data"`
+	Cursor *string         `json:"cursor"`
 }
 
 // postResponse is the API response for a single post
 type postResponse struct {
-	Data models.Post `json:"data"`
+	Data entities.Post `json:"data"`
 }
 
 // repliesResponse is the API response for listing replies
 type repliesResponse struct {
-	Data   []models.Reply `json:"data"`
-	Cursor *string        `json:"cursor"`
+	Data   []entities.Reply `json:"data"`
+	Cursor *string          `json:"cursor"`
 }
 
 // filterPosts removes empty-content posts (audio/image only) and extracts the cursor
-func filterPosts(resp postsResponse) ([]models.Post, string) {
-	posts := make([]models.Post, 0, len(resp.Data))
+func filterPosts(resp postsResponse) ([]entities.Post, string) {
+	posts := make([]entities.Post, 0, len(resp.Data))
 	for _, p := range resp.Data {
 		if strings.TrimSpace(p.Content) != "" {
 			posts = append(posts, p)
@@ -42,7 +42,7 @@ func filterPosts(resp postsResponse) ([]models.Post, string) {
 }
 
 // FetchPosts retrieves the latest posts from the feed
-func (c *Client) FetchPosts(limit int) ([]models.Post, string, error) {
+func (c *Client) FetchPosts(limit int) ([]entities.Post, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/posts?limit=%d", c.BaseURL, limit)
 
 	body, err := c.doGet(reqURL)
@@ -60,7 +60,7 @@ func (c *Client) FetchPosts(limit int) ([]models.Post, string, error) {
 }
 
 // FetchMorePosts retrieves the next page of posts using cursor pagination
-func (c *Client) FetchMorePosts(limit int, cursor string) ([]models.Post, string, error) {
+func (c *Client) FetchMorePosts(limit int, cursor string) ([]entities.Post, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/posts?limit=%d&cursor=%s", c.BaseURL, limit, url.QueryEscape(cursor))
 
 	body, err := c.doGet(reqURL)
@@ -78,7 +78,7 @@ func (c *Client) FetchMorePosts(limit int, cursor string) ([]models.Post, string
 }
 
 // FetchPost retrieves a single post by ID
-func (c *Client) FetchPost(postID string) (*models.Post, error) {
+func (c *Client) FetchPost(postID string) (*entities.Post, error) {
 	reqURL := fmt.Sprintf("%s/v1/posts/%s", c.BaseURL, postID)
 
 	body, err := c.doGet(reqURL)
@@ -169,7 +169,7 @@ func (c *Client) DeleteReply(replyID string) error {
 }
 
 // FetchReplies retrieves replies for a post
-func (c *Client) FetchReplies(postID string) ([]models.Reply, error) {
+func (c *Client) FetchReplies(postID string) ([]entities.Reply, error) {
 	reqURL := fmt.Sprintf("%s/v1/posts/%s/replies?limit=100", c.BaseURL, postID)
 
 	body, err := c.doGet(reqURL)

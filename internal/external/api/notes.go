@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 )
 
 type notesResponse struct {
-	Data   []models.Note `json:"data"`
-	Cursor *string       `json:"cursor"`
+	Data   []entities.Note `json:"data"`
+	Cursor *string         `json:"cursor"`
 }
 
 type noteResponse struct {
-	Data models.Note `json:"data"`
+	Data entities.Note `json:"data"`
 }
 
 type noteIDResponse struct {
@@ -34,7 +34,7 @@ type updateNoteRequest struct {
 }
 
 // FetchNotes retrieves the current user's notes
-func (c *Client) FetchNotes(limit int) ([]models.Note, string, error) {
+func (c *Client) FetchNotes(limit int) ([]entities.Note, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/notes?limit=%d", c.BaseURL, limit)
 	body, err := c.doGet(reqURL)
 	if err != nil {
@@ -52,7 +52,7 @@ func (c *Client) FetchNotes(limit int) ([]models.Note, string, error) {
 }
 
 // FetchMoreNotes retrieves the next page of notes
-func (c *Client) FetchMoreNotes(limit int, cursor string) ([]models.Note, string, error) {
+func (c *Client) FetchMoreNotes(limit int, cursor string) ([]entities.Note, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/notes?limit=%d&cursor=%s", c.BaseURL, limit, url.QueryEscape(cursor))
 	body, err := c.doGet(reqURL)
 	if err != nil {

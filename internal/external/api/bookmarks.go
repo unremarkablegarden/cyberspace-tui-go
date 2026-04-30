@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 )
 
 type bookmarksResponse struct {
-	Data   []models.Bookmark `json:"data"`
-	Cursor *string           `json:"cursor"`
+	Data   []entities.Bookmark `json:"data"`
+	Cursor *string             `json:"cursor"`
 }
 
 type createBookmarkRequest struct {
@@ -25,7 +25,7 @@ type createBookmarkResponse struct {
 }
 
 // FetchBookmarks retrieves the user's saved bookmarks
-func (c *Client) FetchBookmarks(limit int) ([]models.Bookmark, string, error) {
+func (c *Client) FetchBookmarks(limit int) ([]entities.Bookmark, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/bookmarks?limit=%d", c.BaseURL, limit)
 
 	body, err := c.doGet(reqURL)
@@ -47,7 +47,7 @@ func (c *Client) FetchBookmarks(limit int) ([]models.Bookmark, string, error) {
 }
 
 // FetchMoreBookmarks retrieves the next page of bookmarks using cursor pagination
-func (c *Client) FetchMoreBookmarks(limit int, cursor string) ([]models.Bookmark, string, error) {
+func (c *Client) FetchMoreBookmarks(limit int, cursor string) ([]entities.Bookmark, string, error) {
 	reqURL := fmt.Sprintf("%s/v1/bookmarks?limit=%d&cursor=%s", c.BaseURL, limit, url.QueryEscape(cursor))
 
 	body, err := c.doGet(reqURL)
@@ -70,7 +70,7 @@ func (c *Client) FetchMoreBookmarks(limit int, cursor string) ([]models.Bookmark
 
 // fillMissingPosts fetches post data for any bookmarks where it wasn't embedded,
 // and marks bookmarks as deleted if the post can't be retrieved or is deleted.
-func (c *Client) fillMissingPosts(bookmarks []models.Bookmark) {
+func (c *Client) fillMissingPosts(bookmarks []entities.Bookmark) {
 	for i := range bookmarks {
 		if bookmarks[i].Post.ID == "" && bookmarks[i].PostID != "" {
 			post, err := c.FetchPost(bookmarks[i].PostID)
