@@ -11,7 +11,6 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/views"
 )
 
 type MainModel struct {
@@ -41,7 +40,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Switch views stuff
 	case messages.SwitchToFeed:
-		feedModel := views.NewFeedModel(mm.CyberClient)
+		feedModel := models.NewFeedModel(mm.CyberClient)
 		mm.ActiveModel = feedModel
 		return mm, mm.ActiveModel.Init()
 
