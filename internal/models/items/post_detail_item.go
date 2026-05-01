@@ -1,4 +1,4 @@
-package models
+package items
 
 import (
 	"fmt"
@@ -29,17 +29,6 @@ func (p PostItem) FilterValue() string {
 
 func (p PostItem) Title() string       { return "@" + p.Post.AuthorUsername }
 func (p PostItem) Description() string { return Truncate(StripMarkdown(p.Post.Content), 80) }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOAD MORE ITEM — sentinel item at the bottom of the list
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// LoadMoreItem is a sentinel list item for triggering pagination.
-type LoadMoreItem struct{}
-
-func (l LoadMoreItem) FilterValue() string { return "" }
-func (l LoadMoreItem) Title() string       { return "LOAD MORE" }
-func (l LoadMoreItem) Description() string { return "" }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST DELEGATE — custom rendering for list items
@@ -124,7 +113,7 @@ func renderPostCard(p entities.Post, selected bool, width int) string {
 		boxContent.WriteString(tagsLine)
 	}
 
-	return buildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, selected)
 }
 
 func renderLoadMoreCard(selected bool, width int) string {
@@ -141,57 +130,5 @@ func renderLoadMoreCard(selected bool, width int) string {
 	}
 	centeredContent := strings.Repeat(" ", padding) + content
 
-	return buildCardBox(centeredContent, innerWidth, selected)
-}
-
-// buildCardBox renders content in a bordered card with rounded corners.
-func buildCardBox(content string, width int, selected bool) string {
-	var borderColor lipgloss.Color
-	if selected {
-		borderColor = styles.ColorBright
-	} else {
-		borderColor = styles.ColorDim
-	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-	contentStyle := lipgloss.NewStyle().Foreground(styles.ColorNormal)
-
-	// Rounded corners
-	top := borderStyle.Render("╭" + strings.Repeat("─", width) + "╮")
-	bottom := borderStyle.Render("╰" + strings.Repeat("─", width) + "╯")
-
-	innerWidth := width - 2
-
-	lines := strings.Split(content, "\n")
-	var middle strings.Builder
-	totalLines := 0
-	maxLines := 4
-
-	for _, line := range lines {
-		if totalLines >= maxLines {
-			break
-		}
-		wrappedLines := wrapText(line, innerWidth)
-		for _, wl := range wrappedLines {
-			if totalLines >= maxLines {
-				break
-			}
-			styled := contentStyle.Render(wl)
-			lineWidth := lipgloss.Width(styled)
-			pad := innerWidth - lineWidth
-			if pad < 0 {
-				pad = 0
-			}
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString(" ")
-			middle.WriteString(styled)
-			middle.WriteString(strings.Repeat(" ", pad))
-			middle.WriteString(" ")
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString("\n")
-			totalLines++
-		}
-	}
-
-	return top + "\n" + middle.String() + bottom
+	return BuildCardBox(centeredContent, innerWidth, selected)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -123,7 +124,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m LoginModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 	var b strings.Builder
 
 	// Top scan line effect

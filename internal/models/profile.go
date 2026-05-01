@@ -15,6 +15,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -49,7 +50,7 @@ type ProfileModel struct {
 
 // NewProfileModel creates a new profile screen for the given username
 func NewProfileModel(client *api.Client, username, currentUsername string, prevMsg messages.PrevMessage) ProfileModel {
-	delegate := PostDelegate{}
+	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -74,7 +75,7 @@ func NewProfileModel(client *api.Client, username, currentUsername string, prevM
 		isOwnProfile:    isOwn,
 		list:            l,
 		client:          client,
-		spinner:         NewSpinner(),
+		spinner:         items.NewSpinner(),
 		loading:         true,
 		keys:            NewProfileKeyMap(),
 		help:            h,
@@ -122,7 +123,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
-			case PostItem:
+			case items.PostItem:
 				post := it.Post
 				return m, func() tea.Msg {
 					return messages.SwitchToPostDetail{
@@ -130,7 +131,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						BackMessage: messages.SwitchToProfile{Username: m.username},
 					}
 				}
-			case LoadMoreItem:
+			case items.LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
@@ -141,7 +142,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionRelease && !m.loading {
 			for _, item := range m.list.Items() {
-				if pi, ok := item.(PostItem); ok {
+				if pi, ok := item.(items.PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
 						return m, func() tea.Msg {
@@ -180,11 +181,11 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = msg.Cursor != ""
 		m.user = msg.User
 
-		items := buildListItems(
+		localItems := items.BuildListItems(
 			&m.list, msg.IsAdditional, m.hasMore,
-			postsToItems(msg.Posts),
+			items.PostsToItems(msg.Posts),
 		)
-		cmd := m.list.SetItems(items)
+		cmd := m.list.SetItems(localItems)
 
 		// Fetch follow status for other users
 		if !m.isOwnProfile && !msg.IsAdditional {
@@ -226,7 +227,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ProfileModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		loadingBox := styles.DataBox("ACCESSING USER DATA",
@@ -235,18 +236,18 @@ func (m ProfileModel) View() string {
 				"\n"+
 				"  "+styles.Dim.Render("Retrieving profile data...")+"\n",
 			50)
-		return FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	if m.err != nil {
 		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
 			"\n\n" +
 			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	var b strings.Builder
-	b.WriteString(RenderHeader("▓▒░ PROFILE ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ PROFILE ░▒▓", w))
 	b.WriteString(m.renderProfileInfo(w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
@@ -326,7 +327,7 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 	// Render content lines inside box
 	var mid strings.Builder
 	for _, line := range strings.Split(strings.TrimRight(content.String(), "\n"), "\n") {
-		wrappedLines := wrapText(line, innerWidth)
+		wrappedLines := items.WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
 			lineWidth := lipgloss.Width(wl)
 			pad := innerWidth - lineWidth

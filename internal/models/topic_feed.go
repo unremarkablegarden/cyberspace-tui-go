@@ -14,6 +14,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -35,7 +36,7 @@ type TopicFeedModel struct {
 }
 
 func NewTopicFeedModel(client *api.Client, topic entities.Topic) TopicFeedModel {
-	delegate := PostDelegate{}
+	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -56,7 +57,7 @@ func NewTopicFeedModel(client *api.Client, topic entities.Topic) TopicFeedModel 
 		topic:   topic,
 		list:    l,
 		client:  client,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
 		keys:    NewTopicFeedKeyMap(),
@@ -87,7 +88,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
 		case key.Matches(msg, m.keys.Profile):
-			if item, ok := m.list.SelectedItem().(PostItem); ok {
+			if item, ok := m.list.SelectedItem().(items.PostItem); ok {
 				username := item.Post.AuthorUsername
 				return m, func() tea.Msg {
 					return messages.SwitchToProfile{
@@ -98,7 +99,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
-			case PostItem:
+			case items.PostItem:
 				post := it.Post
 				return m, func() tea.Msg {
 					return messages.SwitchToPostDetail{
@@ -106,7 +107,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
 					}
 				}
-			case LoadMoreItem:
+			case items.LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
@@ -117,7 +118,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionRelease && !m.loading {
 			for _, item := range m.list.Items() {
-				if pi, ok := item.(PostItem); ok {
+				if pi, ok := item.(items.PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
 						return m, func() tea.Msg {
@@ -151,11 +152,11 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = msg.Cursor != ""
 		m.err = nil
 
-		items := buildListItems(
+		localItems := items.BuildListItems(
 			&m.list, msg.IsAdditional, m.hasMore,
-			postsToItems(msg.Posts),
+			items.PostsToItems(msg.Posts),
 		)
-		return m, m.list.SetItems(items)
+		return m, m.list.SetItems(localItems)
 
 	case messages.TopicPostsLoadedErrMsg:
 		m.loading = false
@@ -180,7 +181,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m TopicFeedModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		loadingBox := styles.DataBox("FILTERING FEED",
@@ -189,18 +190,18 @@ func (m TopicFeedModel) View() string {
 				"\n"+
 				"  "+styles.Dim.Render("Filtering transmissions by topic...")+"\n",
 			50)
-		return FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	if m.err != nil {
 		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
 			"\n\n" +
 			styles.Dim.Render("Press [r] to retry, [esc] to go back")
-		return FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	var b strings.Builder
-	b.WriteString(RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
 	b.WriteString(m.renderFooter(w))

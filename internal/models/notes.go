@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -13,58 +12,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// NoteItem implements list.Item for notes
-type NoteItem struct{ Note entities.Note }
-
-func (n NoteItem) FilterValue() string { return n.Note.Content }
-func (n NoteItem) Title() string       { return n.Note.Content }
-func (n NoteItem) Description() string { return TimeAgo(n.Note.CreatedAt) }
-
-// noteDelegate renders note items in the list
-type noteDelegate struct{}
-
-func (d noteDelegate) Height() int                               { return 3 }
-func (d noteDelegate) Spacing() int                              { return 0 }
-func (d noteDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
-func (d noteDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	switch it := item.(type) {
-	case NoteItem:
-		isSelected := index == m.Index()
-
-		content := strings.TrimSpace(it.Note.Content)
-		content = strings.ReplaceAll(content, "\n", " ")
-		if len(content) > 72 {
-			content = content[:72] + "…"
-		}
-
-		date := TimeAgo(it.Note.CreatedAt)
-		var meta string
-		if len(it.Note.Topics) > 0 {
-			meta = date + "  [" + strings.Join(it.Note.Topics, "] [") + "]"
-		} else {
-			meta = date
-		}
-
-		var contentLine, metaLine string
-		if isSelected {
-			contentLine = styles.Bright.Render("▸ " + content)
-			metaLine = styles.Dim.Render("  " + meta)
-		} else {
-			contentLine = styles.Normal.Render("  " + content)
-			metaLine = styles.Dim.Render("  " + meta)
-		}
-		fmt.Fprintf(w, "%s\n%s\n", contentLine, metaLine)
-
-	case LoadMoreItem:
-		fmt.Fprint(w, zone.Mark("load-more-notes", styles.Dim.Render("  ▼ load more")))
-	}
-}
 
 // NotesModel is the notes list screen
 type NotesModel struct {
@@ -87,7 +39,7 @@ type NotesModel struct {
 
 // NewNotesModel creates a new notes list screen
 func NewNotesModel(client *api.Client) NotesModel {
-	l := list.New([]list.Item{}, noteDelegate{}, 0, 0)
+	l := list.New([]list.Item{}, items.NoteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 	l.SetFilteringEnabled(false)
@@ -106,7 +58,7 @@ func NewNotesModel(client *api.Client) NotesModel {
 	return NotesModel{
 		list:    l,
 		client:  client,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 		loading: true,
 		keys:    NewNotesKeyMap(),
 		help:    h,
@@ -152,22 +104,22 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.New):
 			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
 		case key.Matches(msg, m.keys.Edit):
-			if ni, ok := m.list.SelectedItem().(NoteItem); ok {
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
 				note := ni.Note
 				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
 			}
 		case key.Matches(msg, m.keys.Delete):
-			if ni, ok := m.list.SelectedItem().(NoteItem); ok {
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
 				m.confirmingDelete = true
 				m.deletingNoteID = ni.Note.ID
 				return m, nil
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
-			case NoteItem:
+			case items.NoteItem:
 				note := it.Note
 				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
-			case LoadMoreItem:
+			case items.LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreNotes())
@@ -200,11 +152,11 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = msg.Cursor != ""
 		m.err = nil
 
-		items := buildListItems(
+		localItems := items.BuildListItems(
 			&m.list, msg.IsAdditional, m.hasMore,
-			notesToItems(msg.Notes),
+			items.NotesToItems(msg.Notes),
 		)
-		return m, m.list.SetItems(items)
+		return m, m.list.SetItems(localItems)
 
 	case messages.NotesLoadedErrMsg:
 		m.loading = false
@@ -238,7 +190,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m NotesModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		loadingBox := styles.DataBox("ACCESSING PRIVATE NOTES",
@@ -247,18 +199,18 @@ func (m NotesModel) View() string {
 				"\n"+
 				"  "+styles.Dim.Render("Retrieving encrypted data...")+"\n",
 			50)
-		return FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	if m.err != nil {
 		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
 			"\n\n" +
 			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	var b strings.Builder
-	b.WriteString(RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
 
 	noteCount := len(m.list.Items())
 	label := fmt.Sprintf("  %d notes", noteCount)

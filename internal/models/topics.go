@@ -15,6 +15,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -58,7 +59,7 @@ func renderTopicCard(t entities.Topic, selected bool, width int) string {
 	}
 
 	line := styles.Bright.Render(tag) + strings.Repeat(" ", spacing) + styles.Dim.Render(count)
-	return buildCardBox(line, innerWidth, selected)
+	return items.BuildCardBox(line, innerWidth, selected)
 }
 
 // ─── TopicsModel ────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ func NewTopicsModel(client *api.Client) TopicsModel {
 	return TopicsModel{
 		list:    l,
 		client:  client,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 		loading: true,
 		keys:    NewTopicsKeyMap(),
 		help:    h,
@@ -140,11 +141,11 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.TopicsLoadedMsg:
 		m.loading = false
-		items := make([]list.Item, len(msg.Topics))
+		localItems := make([]list.Item, len(msg.Topics))
 		for i, t := range msg.Topics {
-			items[i] = TopicItem{Topic: t}
+			localItems[i] = TopicItem{Topic: t}
 		}
-		cmd := m.list.SetItems(items)
+		cmd := m.list.SetItems(localItems)
 		return m, cmd
 
 	case messages.TopicsLoadedErrMsg:
@@ -167,7 +168,7 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m TopicsModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		loadingBox := styles.DataBox("INDEXING TOPICS",
@@ -176,18 +177,18 @@ func (m TopicsModel) View() string {
 				"\n"+
 				"  "+styles.Dim.Render("Scanning the datastream...")+"\n",
 			50)
-		return FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	if m.err != nil {
 		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
 			"\n\n" +
 			styles.Dim.Render("Press [esc] to go back")
-		return FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
 	}
 
 	var b strings.Builder
-	b.WriteString(RenderHeader("▓▒░ TOPICS ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ TOPICS ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -98,7 +99,7 @@ func NewComposeModel(client *api.Client) ComposeModel {
 		focused:     "content",
 		keys:        NewComposeKeyMap(),
 		help:        h,
-		spinner:     NewSpinner(),
+		spinner:     items.NewSpinner(),
 	}
 }
 
@@ -207,7 +208,7 @@ func (m ComposeModel) sendPost(content string, topics []string) tea.Cmd {
 }
 
 func (m ComposeModel) View() string {
-	w, _ := SafeDimensions(m.width, m.height)
+	w, _ := items.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
@@ -220,7 +221,7 @@ func (m ComposeModel) View() string {
 
 	var b strings.Builder
 
-	b.WriteString(RenderHeader("▓▒░ NEW POST ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ NEW POST ░▒▓", w))
 	b.WriteString("\n")
 
 	// Box title

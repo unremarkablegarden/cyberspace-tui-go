@@ -1,4 +1,4 @@
-package models
+package items
 
 import (
 	"fmt"
@@ -85,7 +85,7 @@ func renderNotificationCard(n entities.Notification, selected bool, width int) s
 		boxContent.WriteString(line2)
 	}
 
-	return buildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, selected)
 }
 
 func notificationSummary(n entities.Notification) string {

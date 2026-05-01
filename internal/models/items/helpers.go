@@ -1,4 +1,4 @@
-package models
+package items
 
 import (
 	"fmt"
@@ -57,8 +57,8 @@ func Truncate(s string, max int) string {
 	return s + "..."
 }
 
-// wrapText wraps text to fit within a visual width, splitting on word boundaries.
-func wrapText(text string, width int) []string {
+// WrapText wraps text to fit within a visual width, splitting on word boundaries.
+func WrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
@@ -259,8 +259,60 @@ func ReplaceEmojis(s string) string {
 	return b.String()
 }
 
-// buildListItems updates lists when added
-func buildListItems(
+// BuildCardBox renders content in a bordered card with rounded corners.
+func BuildCardBox(content string, width int, selected bool) string {
+	var borderColor lipgloss.Color
+	if selected {
+		borderColor = styles.ColorBright
+	} else {
+		borderColor = styles.ColorDim
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	contentStyle := lipgloss.NewStyle().Foreground(styles.ColorNormal)
+
+	// Rounded corners
+	top := borderStyle.Render("╭" + strings.Repeat("─", width) + "╮")
+	bottom := borderStyle.Render("╰" + strings.Repeat("─", width) + "╯")
+
+	innerWidth := width - 2
+
+	lines := strings.Split(content, "\n")
+	var middle strings.Builder
+	totalLines := 0
+	maxLines := 4
+
+	for _, line := range lines {
+		if totalLines >= maxLines {
+			break
+		}
+		wrappedLines := WrapText(line, innerWidth)
+		for _, wl := range wrappedLines {
+			if totalLines >= maxLines {
+				break
+			}
+			styled := contentStyle.Render(wl)
+			lineWidth := lipgloss.Width(styled)
+			pad := innerWidth - lineWidth
+			if pad < 0 {
+				pad = 0
+			}
+			middle.WriteString(borderStyle.Render("│"))
+			middle.WriteString(" ")
+			middle.WriteString(styled)
+			middle.WriteString(strings.Repeat(" ", pad))
+			middle.WriteString(" ")
+			middle.WriteString(borderStyle.Render("│"))
+			middle.WriteString("\n")
+			totalLines++
+		}
+	}
+
+	return top + "\n" + middle.String() + bottom
+}
+
+// BuildListItems updates lists when added
+func BuildListItems(
 	l *list.Model,
 	isAdditional bool,
 	hasMore bool,
@@ -291,7 +343,7 @@ func buildListItems(
 	return items
 }
 
-func bookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
+func BookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
 	items := make([]list.Item, 0, len(bookmarks))
 	for _, b := range bookmarks {
 		if !b.Post.Deleted {
@@ -301,7 +353,7 @@ func bookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
 	return items
 }
 
-func postsToItems(posts []entities.Post) []list.Item {
+func PostsToItems(posts []entities.Post) []list.Item {
 	items := make([]list.Item, len(posts))
 	for i, p := range posts {
 		items[i] = PostItem{Post: p}
@@ -309,7 +361,7 @@ func postsToItems(posts []entities.Post) []list.Item {
 	return items
 }
 
-func notesToItems(notes []entities.Note) []list.Item {
+func NotesToItems(notes []entities.Note) []list.Item {
 	items := make([]list.Item, len(notes))
 	for i, n := range notes {
 		items[i] = NoteItem{Note: n}
@@ -317,7 +369,7 @@ func notesToItems(notes []entities.Note) []list.Item {
 	return items
 }
 
-func notificationsToItems(notifs []entities.Notification) []list.Item {
+func NotificationsToItems(notifs []entities.Notification) []list.Item {
 	items := make([]list.Item, len(notifs))
 	for i, n := range notifs {
 		items[i] = NotificationItem{Notification: n}

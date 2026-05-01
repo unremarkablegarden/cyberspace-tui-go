@@ -14,6 +14,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -107,7 +108,7 @@ func NewEditProfileModel(client *api.Client, user entities.User) EditProfileMode
 		focused: 0,
 		keys:    NewEditProfileKeyMap(),
 		help:    h,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 	}
 }
 
@@ -188,7 +189,7 @@ func (m EditProfileModel) saveProfile() tea.Cmd {
 }
 
 func (m EditProfileModel) View() string {
-	w, _ := SafeDimensions(m.width, m.height)
+	w, _ := items.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
@@ -200,7 +201,7 @@ func (m EditProfileModel) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(RenderHeader("▓▒░ EDIT PROFILE ░▒▓", w))
+	b.WriteString(items.RenderHeader("▓▒░ EDIT PROFILE ░▒▓", w))
 	b.WriteString("\n")
 
 	title := "PROFILE DATA"

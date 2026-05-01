@@ -14,6 +14,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -73,7 +74,7 @@ func NewNoteComposeModel(client *api.Client, note entities.Note, isEdit bool) No
 		focused:     "content",
 		keys:        NewNoteComposeKeyMap(),
 		help:        h,
-		spinner:     NewSpinner(),
+		spinner:     items.NewSpinner(),
 	}
 }
 
@@ -187,7 +188,7 @@ func (m NoteComposeModel) saveNote(content string, topics []string) tea.Cmd {
 }
 
 func (m NoteComposeModel) View() string {
-	w, _ := SafeDimensions(m.width, m.height)
+	w, _ := items.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
@@ -204,7 +205,7 @@ func (m NoteComposeModel) View() string {
 	if m.isEdit {
 		header = "▓▒░ EDIT NOTE ░▒▓"
 	}
-	b.WriteString(RenderHeader(header, w))
+	b.WriteString(items.RenderHeader(header, w))
 	b.WriteString("\n")
 
 	title := "COMPOSE"

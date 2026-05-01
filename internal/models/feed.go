@@ -13,6 +13,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -35,7 +36,7 @@ type FeedModel struct {
 // NewFeedModel creates a new feed screen
 func NewFeedModel(client *api.Client) FeedModel {
 	// Create list with custom delegate
-	delegate := PostDelegate{}
+	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -60,7 +61,7 @@ func NewFeedModel(client *api.Client) FeedModel {
 	return FeedModel{
 		list:    l,
 		client:  client,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
 		keys:    NewFeedKeyMap(),
@@ -109,18 +110,18 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Notes):
 			return m, func() tea.Msg { return messages.SwitchToNotes{} }
 		case key.Matches(msg, m.keys.Profile):
-			if item, ok := m.list.SelectedItem().(PostItem); ok {
+			if item, ok := m.list.SelectedItem().(items.PostItem); ok {
 				username := item.Post.AuthorUsername
 				return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
 			}
 		case key.Matches(msg, m.keys.Open):
 			if item := m.list.SelectedItem(); item != nil {
 				switch it := item.(type) {
-				case PostItem:
+				case items.PostItem:
 					return m, func() tea.Msg {
 						return messages.SwitchToPostDetail{Post: it.Post}
 					}
-				case LoadMoreItem:
+				case items.LoadMoreItem:
 					if !m.loadingMore {
 						m.loadingMore = true
 						return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
@@ -138,7 +139,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action == tea.MouseActionRelease && !m.loading {
 			// Check if a post card was clicked
 			for _, item := range m.list.Items() {
-				if pi, ok := item.(PostItem); ok {
+				if pi, ok := item.(items.PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
 						return m, func() tea.Msg {
@@ -171,9 +172,9 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 
-		items := buildListItems(
+		items := items.BuildListItems(
 			&m.list, msg.IsAdditional, m.hasMore,
-			postsToItems(msg.Posts),
+			items.PostsToItems(msg.Posts),
 		)
 		return m, m.list.SetItems(items)
 
@@ -200,7 +201,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m FeedModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		return m.renderLoadingScreen(w, h)
@@ -227,7 +228,7 @@ func (m FeedModel) View() string {
 }
 
 func (m FeedModel) renderHeader(width int) string {
-	return RenderHeader("▓▒░ ᑕ¥βєяรקค¢є ░▒▓", width)
+	return items.RenderHeader("▓▒░ ᑕ¥βєяรקค¢є ░▒▓", width)
 }
 
 func (m FeedModel) renderFooter(width int) string {
@@ -256,7 +257,7 @@ func (m FeedModel) renderLoadingScreen(width, height int) string {
 			"  "+styles.Dim.Render("Please wait while we access the datastream")+"\n",
 		50)
 
-	return FullScreen(b.String()+loadingBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(b.String()+loadingBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 func (m FeedModel) renderErrorScreen(width, height int) string {
@@ -264,7 +265,7 @@ func (m FeedModel) renderErrorScreen(width, height int) string {
 		"\n\n" +
 		styles.Dim.Render("Press [r] to retry connection, [q] to disconnect")
 
-	return FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 // SetSize updates the view dimensions

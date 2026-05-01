@@ -1,4 +1,4 @@
-package models
+package items
 
 import (
 	"fmt"
@@ -99,5 +99,5 @@ func renderBookmarkCard(b entities.Bookmark, selected bool, width int) string {
 		boxContent.WriteString(tagsLine)
 	}
 
-	return buildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, selected)
 }

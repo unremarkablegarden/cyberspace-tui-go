@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -95,7 +96,7 @@ func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ThemeSwitcherModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	var content strings.Builder
 
@@ -148,7 +149,7 @@ func (m ThemeSwitcherModel) View() string {
 
 	box := styles.TitledBox("THEME SELECTOR", content.String(), boxWidth)
 
-	return FullScreen(box, w, h, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(box, w, h, lipgloss.Center, lipgloss.Center)
 }
 
 func (m *ThemeSwitcherModel) previewTheme() {

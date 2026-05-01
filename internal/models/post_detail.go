@@ -15,6 +15,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -62,7 +63,7 @@ func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername 
 		postID:          post.ID,
 		post:            post,
 		currentUsername: currentUsername,
-		spinner:         NewSpinner(),
+		spinner:         items.NewSpinner(),
 		loading:         true,
 		keys:            NewPostDetailKeyMap(),
 		help:            h,
@@ -71,7 +72,7 @@ func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername 
 		prevMsg:         prevMsg,
 	}
 	// Pre-populate viewport so post shows immediately while replies load
-	w, _ := SafeDimensions(0, 0)
+	w, _ := items.SafeDimensions(0, 0)
 	m.viewport.SetContent(m.buildContent(w))
 	return m
 }
@@ -198,7 +199,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		// Rebuild viewport content while loading so spinner animates
 		if m.loading && m.post.ID != "" {
-			w, _ := SafeDimensions(m.width, m.height)
+			w, _ := items.SafeDimensions(m.width, m.height)
 			m.viewport.SetContent(m.buildContent(w))
 		}
 		return m, cmd
@@ -207,7 +208,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.post = msg.Post
 		m.replies = msg.Replies
-		w, _ := SafeDimensions(m.width, m.height)
+		w, _ := items.SafeDimensions(m.width, m.height)
 		m.viewport.SetContent(m.buildContent(w))
 		m.viewport.GotoTop()
 
@@ -233,7 +234,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bookmarking = false
 		m.bookmarked = true
 		m.post.BookmarksCount++
-		w, _ := SafeDimensions(m.width, m.height)
+		w, _ := items.SafeDimensions(m.width, m.height)
 		m.viewport.SetContent(m.buildContent(w))
 
 	case messages.PostBookmarkAddedErrMsg:
@@ -256,7 +257,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.replyInput.BlurredStyle = m.replyInput.FocusedStyle
 		// Rebuild content with new theme colors
 		if m.post.ID != "" {
-			w, _ := SafeDimensions(m.width, m.height)
+			w, _ := items.SafeDimensions(m.width, m.height)
 			m.viewport.SetContent(m.buildContent(w))
 		}
 
@@ -271,7 +272,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m PostDetailModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading && m.post.ID == "" {
 		return m.renderLoadingScreen(w, h)
@@ -307,7 +308,7 @@ func (m PostDetailModel) View() string {
 }
 
 func (m PostDetailModel) renderHeader(width int) string {
-	return RenderHeader("▓▒░ ENTRY VIEWER ░▒▓", width) + "\n"
+	return items.RenderHeader("▓▒░ ENTRY VIEWER ░▒▓", width) + "\n"
 }
 
 func (m PostDetailModel) renderFooter(width int) string {
@@ -471,11 +472,11 @@ func renderReplyNode(node *replyNode, depth int, isLast bool, contentWidth int) 
 	// Header line: @username · time
 	b.WriteString(styles.Dim.Render(prefix))
 	b.WriteString(styles.Username.Render("@" + node.Reply.AuthorUsername))
-	b.WriteString(styles.Dim.Render(" · " + TimeAgo(node.Reply.CreatedAt)))
+	b.WriteString(styles.Dim.Render(" · " + items.TimeAgo(node.Reply.CreatedAt)))
 	b.WriteString("\n")
 
 	// Content lines with continuation indent
-	content := StripMarkdownKeepNewlines(node.Reply.Content)
+	content := items.StripMarkdownKeepNewlines(node.Reply.Content)
 	for _, line := range strings.Split(content, "\n") {
 		b.WriteString(styles.Dim.Render(childPrefix))
 		b.WriteString(styles.Normal.Render(line))
@@ -528,7 +529,7 @@ func (m PostDetailModel) renderLoadingScreen(width, height int) string {
 			"  "+styles.Dim.Render("Decoding neural patterns...")+"\n",
 		50)
 
-	return FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 func (m PostDetailModel) renderErrorScreen(width, height int) string {
@@ -536,7 +537,7 @@ func (m PostDetailModel) renderErrorScreen(width, height int) string {
 		"\n\n" +
 		styles.Dim.Render("Press [ESC] to return to feed, [r] to retry")
 
-	return FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 func (m PostDetailModel) buildContent(width int) string {
@@ -549,12 +550,12 @@ func (m PostDetailModel) buildContent(width int) string {
 
 	// Metadata box
 	metaWidth := 50
-	metaContent := styles.Username.Render("@"+m.post.AuthorUsername) + "\n" + styles.Dim.Render(TimeAgo(m.post.CreatedAt))
+	metaContent := styles.Username.Render("@"+m.post.AuthorUsername) + "\n" + styles.Dim.Render(items.TimeAgo(m.post.CreatedAt))
 	b.WriteString(renderBox("POST INFO", metaContent, metaWidth))
 	b.WriteString("\n\n")
 
 	// Message content box
-	cleanContent := StripMarkdownKeepNewlines(m.post.Content)
+	cleanContent := items.StripMarkdownKeepNewlines(m.post.Content)
 	b.WriteString(renderBox("MESSAGE", cleanContent, contentWidth))
 	b.WriteString("\n\n")
 
@@ -626,7 +627,7 @@ func renderBox(title, content string, width int) string {
 	var middle strings.Builder
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
-		wrappedLines := wrapText(line, innerWidth)
+		wrappedLines := items.WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
 			// Apply theme foreground to each line
 			styled := contentStyle.Render(wl)

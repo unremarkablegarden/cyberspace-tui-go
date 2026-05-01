@@ -13,6 +13,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -34,7 +35,7 @@ type BookmarksModel struct {
 
 // NewBookmarksModel creates a new bookmarks screen
 func NewBookmarksModel(client *api.Client) BookmarksModel {
-	delegate := BookmarkDelegate{}
+	delegate := items.BookmarkDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -54,7 +55,7 @@ func NewBookmarksModel(client *api.Client) BookmarksModel {
 	return BookmarksModel{
 		list:    l,
 		client:  client,
-		spinner: NewSpinner(),
+		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
 		keys:    NewBookmarksKeyMap(),
@@ -85,12 +86,12 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks())
 		case key.Matches(msg, m.keys.Remove):
-			if item, ok := m.list.SelectedItem().(BookmarkItem); ok && item.Bookmark.ID != "" {
+			if item, ok := m.list.SelectedItem().(items.BookmarkItem); ok && item.Bookmark.ID != "" {
 				return m, m.deleteBookmark(item.Bookmark.ID)
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
-			case BookmarkItem:
+			case items.BookmarkItem:
 				post := it.Bookmark.Post
 				return m, func() tea.Msg {
 					return messages.SwitchToPostDetail{
@@ -98,7 +99,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						BackMessage: messages.SwitchToBookmarks{},
 					}
 				}
-			case LoadMoreItem:
+			case items.LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreBookmarks())
@@ -109,7 +110,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionRelease && !m.loading {
 			for _, item := range m.list.Items() {
-				if bi, ok := item.(BookmarkItem); ok {
+				if bi, ok := item.(items.BookmarkItem); ok {
 					if zone.Get(bi.Bookmark.Post.ID).InBounds(msg) {
 						post := bi.Bookmark.Post
 						return m, func() tea.Msg {
@@ -143,11 +144,11 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 
-		items := buildListItems(
+		localItems := items.BuildListItems(
 			&m.list, msg.IsAdditional, m.hasMore,
-			bookmarksToItems(msg.Bookmarks),
+			items.BookmarksToItems(msg.Bookmarks),
 		)
-		return m, m.list.SetItems(items)
+		return m, m.list.SetItems(localItems)
 
 	case messages.BookmarksLoadedErrMsg:
 		m.loading = false
@@ -155,16 +156,16 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 
 	case messages.BookmarkRemovedMsg:
-		var items []list.Item
+		var localItems []list.Item
 		for _, existing := range m.list.Items() {
-			if bi, ok := existing.(BookmarkItem); ok {
+			if bi, ok := existing.(items.BookmarkItem); ok {
 				if bi.Bookmark.ID == msg.BookmarkID {
 					continue
 				}
 			}
-			items = append(items, existing)
+			localItems = append(localItems, existing)
 		}
-		cmd := m.list.SetItems(items)
+		cmd := m.list.SetItems(localItems)
 		return m, cmd
 
 	case messages.BookmarkRemovedErrMsg:
@@ -188,7 +189,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m BookmarksModel) View() string {
-	w, h := SafeDimensions(m.width, m.height)
+	w, h := items.SafeDimensions(m.width, m.height)
 
 	if m.loading {
 		return m.renderLoadingScreen(w, h)
@@ -209,7 +210,7 @@ func (m BookmarksModel) View() string {
 }
 
 func (m BookmarksModel) renderHeader(width int) string {
-	return RenderHeader("▓▒░ BOOKMARKS ░▒▓", width)
+	return items.RenderHeader("▓▒░ BOOKMARKS ░▒▓", width)
 }
 
 func (m BookmarksModel) renderFooter(width int) string {
@@ -234,14 +235,14 @@ func (m BookmarksModel) renderLoadingScreen(width, height int) string {
 			"\n"+
 			"  "+styles.Dim.Render("Accessing your saved transmissions...")+"\n",
 		50)
-	return FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 func (m BookmarksModel) renderErrorScreen(width, height int) string {
 	errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
 		"\n\n" +
 		styles.Dim.Render("Press [r] to retry, [esc] to go back")
-	return FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
+	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 // SetSize updates the view dimensions

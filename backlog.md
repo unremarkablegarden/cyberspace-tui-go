@@ -12,6 +12,7 @@ Stuff found while working on the code
 - [X] When theme changes, no file is being save to persist changes
 - [X] Logout functionality not implemented
 - [X] Some list paginated events uses similar logic, maybe a generic function can help with that
+- [X] Move *_items to be more clear
 
 ## Stuff to fix
 - [ ] With current changes, each screen change triggers a new request (local cache?)
@@ -20,7 +21,6 @@ Stuff found while working on the code
 - [ ] Note composer "IsEdit" flag works only to edit a note, if "IsEdit" is false, falls back to "new note" instead of open a note in read mode or something
 - [ ] Only first pagination is working
 
-- [ ] Move *_items to be more clear
 
 ## Stuff to do
 - [ ] Menu for easy navigation
