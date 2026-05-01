@@ -74,7 +74,7 @@ func renderNotificationCard(n entities.Notification, selected bool, width int) s
 	line1 := unreadMark + styles.Normal.Render(summary) + strings.Repeat(" ", spacing) + styles.Dim.Render(timeStr)
 
 	var line2 string
-	if n.PostID != "" {
+	if n.Metadata.ReplyID != "" {
 		line2 = styles.Dim.Render("  → open post  [enter]")
 	}
 

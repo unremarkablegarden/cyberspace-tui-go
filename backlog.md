@@ -7,11 +7,11 @@ Stuff found while working on the code
 - [X] Profile does not know where to return, always return to main feed
 - [X] No username when post model added
 - [X] Topics shows 0 posts counter for all topics
+- [X] When open notifications panel, post id is always empty
 
 ## Stuff to fix
 - [ ] With current changes, each screen change triggers a new request (local cache?)
 - [ ] When a post is saved in the post detail view, there is no "unsave" functionality
-- [ ] When open notifications panel, post id is always empty
 - [ ] Same error as empty post id in bookmarks
 - [ ] Some list paginated events uses similar logic, maybe a generic function can help with that
 - [ ] Update help keys

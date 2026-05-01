@@ -20,6 +20,10 @@ type postResponse struct {
 	Data entities.Post `json:"data"`
 }
 
+type replyResponse struct {
+	Data entities.Reply `json:"data"`
+}
+
 // repliesResponse is the API response for listing replies
 type repliesResponse struct {
 	Data   []entities.Reply `json:"data"`
@@ -92,6 +96,22 @@ func (c *Client) FetchPost(postID string) (*entities.Post, error) {
 	}
 
 	return &resp.Data, nil
+}
+
+// FetchPostByReplyID returns the parent post from a replyID
+func (c *Client) FetchPostByReplyID(replyID string) (*entities.Post, error) {
+	reqReplyURL := fmt.Sprintf("%s/v1/replies/%s", c.BaseURL, replyID)
+	dataResReply, dataResReplyErr := c.doGet(reqReplyURL)
+	if dataResReplyErr != nil {
+		return nil, dataResReplyErr
+	}
+
+	var resReply replyResponse
+	if resReplyUnmarErr := json.Unmarshal(dataResReply, &resReply); resReplyUnmarErr != nil {
+		return nil, resReplyUnmarErr
+	}
+
+	return c.FetchPost(resReply.Data.PostID)
 }
 
 // createPostRequest is the request body for creating a post

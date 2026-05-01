@@ -95,10 +95,8 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, m.markRead(n.ID))
 				}
 
-				// Currently post ID is returning empty
-				// check why is returning empty
-				if n.PostID != "" {
-					if p, postErr := m.client.FetchPost(n.PostID); postErr == nil {
+				if n.Metadata.ReplyID != "" {
+					if p, postErr := m.client.FetchPostByReplyID(n.Metadata.ReplyID); postErr == nil {
 						cmds = append(cmds, func() tea.Msg {
 							return messages.SwitchToPostDetail{
 								Post:        *p,
@@ -107,7 +105,6 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						})
 					}
 				}
-
 				return m, tea.Batch(cmds...)
 			case LoadMoreItem:
 				if !m.loadingMore {
