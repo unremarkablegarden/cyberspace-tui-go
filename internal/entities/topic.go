@@ -3,5 +3,6 @@ package entities
 // Topic represents a Cyberspace topic/tag
 type Topic struct {
 	Name      string `json:"name"`
-	PostCount int    `json:"postCount"`
+	TopicID   string `json:"topicId"`
+	PostCount int    `json:"postsCount"`
 }
