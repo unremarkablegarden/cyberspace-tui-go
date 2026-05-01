@@ -12,29 +12,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// NotificationsLoadedMsg is sent when notifications are fetched
-type NotificationsLoadedMsg struct {
-	Notifications []entities.Notification
-	Cursor        string
-}
-
-// MoreNotificationsLoadedMsg is sent when more notifications are loaded
-type MoreNotificationsLoadedMsg struct {
-	Notifications []entities.Notification
-	Cursor        string
-}
-
-// NotificationsErrorMsg is sent when fetching notifications fails
-type NotificationsErrorMsg struct{ Err error }
-
-// OpenPostFromNotificationMsg is sent when opening a post from a notification
-type OpenPostFromNotificationMsg struct{ PostID string }
-
-// BackFromNotificationsMsg is sent when navigating back from notifications
-type BackFromNotificationsMsg struct{}
 
 // NotificationsModel is the notifications screen
 type NotificationsModel struct {
@@ -99,7 +79,7 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackFromNotificationsMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -114,12 +94,17 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !n.Read {
 					cmds = append(cmds, m.markRead(n.ID))
 				}
+
+				// Currently post ID is returning empty
+				// check why is returning empty
 				if n.PostID != "" {
-					postID := n.PostID
-					cmds = append(cmds, func() tea.Msg {
-						return OpenPostFromNotificationMsg{PostID: postID}
-					})
+					if p, postErr := m.client.FetchPost(n.PostID); postErr == nil {
+						cmds = append(cmds, func() tea.Msg {
+							return messages.SwitchToPost{Post: *p}
+						})
+					}
 				}
+
 				return m, tea.Batch(cmds...)
 			case LoadMoreItem:
 				if !m.loadingMore {
@@ -139,39 +124,34 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case NotificationsLoadedMsg:
+	case messages.NotificationsLoadedMsg:
 		m.loading = false
+		m.nextCursor = msg.Cursor
+		m.hasMore = msg.Cursor != ""
 		m.err = nil
-		items := notificationsToItems(msg.Notifications)
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
 
-	case MoreNotificationsLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
 		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue
+		if msg.IsAdditional {
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue
+				}
+				items = append(items, existing)
 			}
-			items = append(items, existing)
+			for _, n := range msg.Notifications {
+				items = append(items, NotificationItem{Notification: n})
+			}
+		} else {
+			items = notificationsToItems(msg.Notifications)
 		}
-		for _, n := range msg.Notifications {
-			items = append(items, NotificationItem{Notification: n})
-		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case NotificationsErrorMsg:
+	case messages.NotificationsErrorMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
@@ -271,9 +251,9 @@ func (m NotificationsModel) fetchNotifications() tea.Cmd {
 	return func() tea.Msg {
 		notifs, cursor, err := m.client.FetchNotifications(30)
 		if err != nil {
-			return NotificationsErrorMsg{Err: err}
+			return messages.NotificationsErrorMsg{Err: err}
 		}
-		return NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor}
+		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor}
 	}
 }
 
@@ -281,9 +261,9 @@ func (m NotificationsModel) fetchMoreNotifications() tea.Cmd {
 	return func() tea.Msg {
 		notifs, cursor, err := m.client.FetchMoreNotifications(30, m.nextCursor)
 		if err != nil {
-			return NotificationsErrorMsg{Err: err}
+			return messages.NotificationsErrorMsg{Err: err}
 		}
-		return MoreNotificationsLoadedMsg{Notifications: notifs, Cursor: cursor}
+		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor, IsAdditional: true}
 	}
 }
 

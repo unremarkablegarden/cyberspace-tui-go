@@ -66,6 +66,9 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = postModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
+		notificationsModel := models.NewNotificationsModel(mm.CyberClient)
+		mm.ActiveModel = notificationsModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
 		// Send message to active model to handle it there
