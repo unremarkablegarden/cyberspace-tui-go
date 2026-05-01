@@ -13,35 +13,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// BookmarksLoadedMsg is sent when bookmarks are fetched
-type BookmarksLoadedMsg struct {
-	Bookmarks []entities.Bookmark
-	Cursor    string
-}
-
-// MoreBookmarksLoadedMsg is sent when more bookmarks are loaded
-type MoreBookmarksLoadedMsg struct {
-	Bookmarks []entities.Bookmark
-	Cursor    string
-}
-
-// BookmarksErrorMsg is sent when fetching bookmarks fails
-type BookmarksErrorMsg struct{ Err error }
-
-// OpenPostFromBookmarksMsg is sent when opening a post from the bookmarks list
-type OpenPostFromBookmarksMsg struct{ Post entities.Post }
-
-// BackToFeedFromBookmarksMsg is sent when navigating back from bookmarks
-type BackToFeedFromBookmarksMsg struct{}
-
-// BookmarkRemovedMsg is sent when a bookmark is successfully deleted
-type BookmarkRemovedMsg struct{ BookmarkID string }
-
-// BookmarkRemoveErrorMsg is sent when deleting a bookmark fails
-type BookmarkRemoveErrorMsg struct{ Err error }
 
 // BookmarksModel is the bookmarks list screen
 type BookmarksModel struct {
@@ -106,20 +80,20 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackToFeedFromBookmarksMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks())
 		case key.Matches(msg, m.keys.Remove):
-			if item, ok := m.list.SelectedItem().(BookmarkItem); ok {
+			if item, ok := m.list.SelectedItem().(BookmarkItem); ok && item.Bookmark.ID != "" {
 				return m, m.deleteBookmark(item.Bookmark.ID)
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
 			case BookmarkItem:
 				post := it.Bookmark.Post
-				return m, func() tea.Msg { return OpenPostFromBookmarksMsg{Post: post} }
+				return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -134,7 +108,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if bi, ok := item.(BookmarkItem); ok {
 					if zone.Get(bi.Bookmark.Post.ID).InBounds(msg) {
 						post := bi.Bookmark.Post
-						return m, func() tea.Msg { return OpenPostFromBookmarksMsg{Post: post} }
+						return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
 					}
 				}
 			}
@@ -154,44 +128,39 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case BookmarksLoadedMsg:
+	case messages.BookmarksLoadedMsg:
 		m.loading = false
 		m.err = nil
-		items := bookmarksToItems(msg.Bookmarks)
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
 
-	case MoreBookmarksLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
 		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue
+		if msg.IsAdditional {
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue
+				}
+				items = append(items, existing)
 			}
-			items = append(items, existing)
+			for _, b := range msg.Bookmarks {
+				items = append(items, BookmarkItem{Bookmark: b})
+			}
+		} else {
+			items = bookmarksToItems(msg.Bookmarks)
 		}
-		for _, b := range msg.Bookmarks {
-			items = append(items, BookmarkItem{Bookmark: b})
-		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case BookmarksErrorMsg:
+	case messages.BookmarksLoadedErrMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
 
-	case BookmarkRemovedMsg:
+	case messages.BookmarkRemovedMsg:
 		var items []list.Item
 		for _, existing := range m.list.Items() {
 			if bi, ok := existing.(BookmarkItem); ok {
@@ -204,7 +173,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case BookmarkRemoveErrorMsg:
+	case messages.BookmarkRemovedErrMsg:
 		m.err = msg.Err
 
 	case ThemeChangedMsg:
@@ -292,9 +261,9 @@ func (m BookmarksModel) fetchBookmarks() tea.Cmd {
 	return func() tea.Msg {
 		bookmarks, cursor, err := m.client.FetchBookmarks(20)
 		if err != nil {
-			return BookmarksErrorMsg{Err: err}
+			return messages.BookmarksLoadedErrMsg{Err: err}
 		}
-		return BookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor}
+		return messages.BookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor}
 	}
 }
 
@@ -302,18 +271,18 @@ func (m BookmarksModel) fetchMoreBookmarks() tea.Cmd {
 	return func() tea.Msg {
 		bookmarks, cursor, err := m.client.FetchMoreBookmarks(20, m.nextCursor)
 		if err != nil {
-			return BookmarksErrorMsg{Err: err}
+			return messages.BookmarksLoadedErrMsg{Err: err}
 		}
-		return MoreBookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor}
+		return messages.BookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor, IsAdditional: true}
 	}
 }
 
 func (m BookmarksModel) deleteBookmark(bookmarkID string) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.DeleteBookmark(bookmarkID); err != nil {
-			return BookmarkRemoveErrorMsg{Err: err}
+			return messages.BookmarkRemovedErrMsg{Err: err}
 		}
-		return BookmarkRemovedMsg{BookmarkID: bookmarkID}
+		return messages.BookmarkRemovedMsg{BookmarkID: bookmarkID}
 	}
 }
 

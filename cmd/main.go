@@ -58,16 +58,20 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = feedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToPost:
-		postModel := models.NewPostDetailModel(
+		postDetailModel := models.NewPostDetailModel(
 			mm.CyberClient,
 			msg.Post,
 			"",
 		)
-		mm.ActiveModel = postModel
+		mm.ActiveModel = postDetailModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
 		notificationsModel := models.NewNotificationsModel(mm.CyberClient)
 		mm.ActiveModel = notificationsModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToBookmarks:
+		bookmarksModel := models.NewBookmarksModel(mm.CyberClient)
+		mm.ActiveModel = bookmarksModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
