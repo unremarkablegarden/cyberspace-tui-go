@@ -157,7 +157,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Profile):
 			username := m.post.AuthorUsername
-			return m, func() tea.Msg { return OpenProfileMsg{Username: username} }
+			return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
 		}
 		// Everything else (j/k, g/G, pgup/pgdn, etc.) falls through to viewport
 

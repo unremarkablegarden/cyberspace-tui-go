@@ -81,6 +81,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, msg.Topic)
 		mm.ActiveModel = topicFeedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToProfile:
+		profileModel := models.NewProfileModel(mm.CyberClient, msg.Username, "")
+		mm.ActiveModel = profileModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
 		// Send message to active model to handle it there

@@ -18,41 +18,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// OpenProfileMsg is sent when the user wants to view a profile
-type OpenProfileMsg struct{ Username string }
-
-// ProfileLoadedMsg is sent when a user's profile and posts are fetched
-type ProfileLoadedMsg struct {
-	User   entities.User
-	Posts  []entities.Post
-	Cursor string
-}
-
-// MoreProfilePostsLoadedMsg is sent when more posts are loaded
-type MoreProfilePostsLoadedMsg struct {
-	Posts  []entities.Post
-	Cursor string
-}
-
-// ProfileErrorMsg is sent when loading a profile fails
-type ProfileErrorMsg struct{ Err error }
-
-// BackFromProfileMsg is sent when navigating back from a profile
-type BackFromProfileMsg struct{}
-
-// followStatusMsg carries the initial follow status for a viewed profile
-type followStatusMsg struct {
-	isFollowing bool
-	followID    string
-}
-
-// followActionMsg carries the result of a follow/unfollow action
-type followActionMsg struct {
-	isFollowing bool
-	followID    string
-	err         error
-}
-
 // profileHeaderHeight is the number of lines reserved for the profile info section
 const profileHeaderHeight = 12
 
@@ -132,7 +97,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackFromProfileMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -191,58 +156,53 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case ProfileLoadedMsg:
+	case messages.ProfileLoadedMsg:
 		m.loading = false
-		m.err = nil
-		m.user = msg.User
-		items := postsToItems(msg.Posts)
 		m.nextCursor = msg.Cursor
+		m.err = nil
 		m.hasMore = msg.Cursor != ""
+		m.user = msg.User
+
+		var items []list.Item
+		if msg.IsAdditional {
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue
+				}
+				items = append(items, existing)
+			}
+			for _, p := range msg.Posts {
+				items = append(items, PostItem{Post: p})
+			}
+		} else {
+			items = postsToItems(msg.Posts)
+		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
+
 		// Fetch follow status for other users
-		if !m.isOwnProfile {
+		if !m.isOwnProfile && !msg.IsAdditional {
 			return m, tea.Batch(cmd, m.fetchFollowStatus())
 		}
 		return m, cmd
 
-	case MoreProfilePostsLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
-		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue
-			}
-			items = append(items, existing)
-		}
-		for _, p := range msg.Posts {
-			items = append(items, PostItem{Post: p})
-		}
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
-
-	case ProfileErrorMsg:
+	case messages.ProfileLoadedErrMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
 
-	case followStatusMsg:
-		m.followLoaded = true
-		m.isFollowing = msg.isFollowing
-		m.followID = msg.followID
-
-	case followActionMsg:
-		m.followPending = false
-		if msg.err == nil {
-			m.isFollowing = msg.isFollowing
-			m.followID = msg.followID
+	case messages.ProfileFollowMsg:
+		if msg.InitialLoading {
+			m.followLoaded = true
+			m.isFollowing = msg.IsFollowing
+			m.followID = msg.FollowID
+		} else {
+			m.followPending = false
+			m.isFollowing = msg.IsFollowing
+			m.followID = msg.FollowID
 		}
 
 	case ThemeChangedMsg:
@@ -412,13 +372,13 @@ func (m ProfileModel) fetchProfile() tea.Cmd {
 	return func() tea.Msg {
 		user, err := m.client.FetchUser(m.username)
 		if err != nil {
-			return ProfileErrorMsg{Err: err}
+			return messages.ProfileLoadedErrMsg{Err: err}
 		}
 		posts, cursor, err := m.client.FetchUserPosts(m.username, 20)
 		if err != nil {
-			return ProfileErrorMsg{Err: err}
+			return messages.ProfileLoadedErrMsg{Err: err}
 		}
-		return ProfileLoadedMsg{User: *user, Posts: posts, Cursor: cursor}
+		return messages.ProfileLoadedMsg{User: *user, Posts: posts, Cursor: cursor}
 	}
 }
 
@@ -426,9 +386,9 @@ func (m ProfileModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		posts, cursor, err := m.client.FetchMoreUserPosts(m.username, 20, m.nextCursor)
 		if err != nil {
-			return ProfileErrorMsg{Err: err}
+			return messages.ProfileLoadedErrMsg{Err: err}
 		}
-		return MoreProfilePostsLoadedMsg{Posts: posts, Cursor: cursor}
+		return messages.ProfileLoadedMsg{User: m.user, Posts: posts, Cursor: cursor, IsAdditional: true}
 	}
 }
 
@@ -438,14 +398,14 @@ func (m ProfileModel) fetchFollowStatus() tea.Cmd {
 		follows, err := m.client.FetchMyFollowing(50)
 		if err != nil {
 			// Non-fatal: just show follow button without status
-			return followStatusMsg{isFollowing: false, followID: ""}
+			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
 		}
 		for _, f := range follows {
 			if f.FollowedID == userID {
-				return followStatusMsg{isFollowing: true, followID: f.ID}
+				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: f.ID, InitialLoading: true}
 			}
 		}
-		return followStatusMsg{isFollowing: false, followID: ""}
+		return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
 	}
 }
 
@@ -454,17 +414,18 @@ func (m ProfileModel) toggleFollow() tea.Cmd {
 		followID := m.followID
 		return func() tea.Msg {
 			if err := m.client.Unfollow(followID); err != nil {
-				return followActionMsg{isFollowing: true, followID: followID, err: err}
+				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: followID}
 			}
-			return followActionMsg{isFollowing: false, followID: ""}
+			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
 	}
+
 	userID := m.user.ID
 	return func() tea.Msg {
 		newFollowID, err := m.client.FollowUser(userID)
 		if err != nil {
-			return followActionMsg{isFollowing: false, followID: "", err: err}
+			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
-		return followActionMsg{isFollowing: true, followID: newFollowID}
+		return messages.ProfileFollowMsg{IsFollowing: true, FollowID: newFollowID}
 	}
 }

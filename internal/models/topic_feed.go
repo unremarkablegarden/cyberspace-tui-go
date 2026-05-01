@@ -89,7 +89,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Profile):
 			if item, ok := m.list.SelectedItem().(PostItem); ok {
 				username := item.Post.AuthorUsername
-				return m, func() tea.Msg { return OpenProfileMsg{Username: username} }
+				return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {

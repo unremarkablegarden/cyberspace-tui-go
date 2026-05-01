@@ -10,4 +10,5 @@ type (
 	SwitchToBookmarks     struct{}
 	SwitchToTopics        struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
+	SwitchToProfile       struct{ Username string }
 )
