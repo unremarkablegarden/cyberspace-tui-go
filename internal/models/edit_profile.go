@@ -13,17 +13,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// OpenEditProfileMsg is sent to open the edit profile screen
-type OpenEditProfileMsg struct{ User entities.User }
-
-// EditProfileDoneMsg is sent when the edit profile screen closes
-type EditProfileDoneMsg struct{ Saved bool }
-
-type profileSaveSuccessMsg struct{}
-type profileSaveErrorMsg struct{ Err error }
 
 // EditProfileKeyMap defines keybindings for the edit profile screen
 type EditProfileKeyMap struct {
@@ -131,7 +123,7 @@ func (m EditProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
-			return m, func() tea.Msg { return EditProfileDoneMsg{Saved: false} }
+			return m, func() tea.Msg { return messages.SwitchToProfile{Username: m.user.Username} }
 		case key.Matches(msg, m.keys.Save):
 			m.saving = true
 			m.err = nil
@@ -160,10 +152,10 @@ func (m EditProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case profileSaveSuccessMsg:
-		return m, func() tea.Msg { return EditProfileDoneMsg{Saved: true} }
+	case messages.EditProfileSaveSuccessMsg:
+		return m, func() tea.Msg { return messages.SwitchToProfile{Username: m.user.Username} }
 
-	case profileSaveErrorMsg:
+	case messages.EditProfileSaveSuccessErrMsg:
 		m.saving = false
 		m.err = msg.Err
 
@@ -189,9 +181,9 @@ func (m EditProfileModel) saveProfile() tea.Cmd {
 			LocationName: m.fields[4].Value(),
 		}
 		if err := m.client.UpdateProfile(req); err != nil {
-			return profileSaveErrorMsg{Err: err}
+			return messages.EditProfileSaveSuccessErrMsg{Err: err}
 		}
-		return profileSaveSuccessMsg{}
+		return messages.EditProfileSaveSuccessMsg{}
 	}
 }
 

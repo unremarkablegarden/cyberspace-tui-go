@@ -118,7 +118,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.EditProfile):
 			if m.isOwnProfile {
 				user := m.user
-				return m, func() tea.Msg { return OpenEditProfileMsg{User: user} }
+				return m, func() tea.Msg { return messages.SwitchToEditProfile{User: user} }
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {

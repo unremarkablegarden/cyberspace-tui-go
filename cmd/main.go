@@ -114,6 +114,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		composeModel := models.NewComposeModel(mm.CyberClient)
 		mm.ActiveModel = composeModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToEditProfile:
+		editProfileModel := models.NewEditProfileModel(mm.CyberClient, msg.User)
+		mm.ActiveModel = editProfileModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel()
 		mm.ActiveModel = themeSwitcherModel
@@ -125,8 +129,6 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = updatedModel
 		return mm, command
 	}
-
-	return mm, nil
 }
 
 func (mm *MainModel) View() string {

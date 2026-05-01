@@ -10,6 +10,7 @@ type (
 	SwitchToCompose       struct{}
 	SwitchToThemeSwitcher struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
+	SwitchToEditProfile   struct{ User entities.User }
 	SwitchToProfile       struct {
 		Username    string
 		BackMessage PrevMessage
