@@ -172,26 +172,11 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 
-		var items []list.Item
-		if msg.IsAdditional {
-			for _, existing := range m.list.Items() {
-				if _, ok := existing.(LoadMoreItem); ok {
-					continue // remove old load-more sentinel
-				}
-				items = append(items, existing)
-			}
-			for _, p := range msg.Posts {
-				items = append(items, PostItem{Post: p})
-			}
-		} else {
-			items = postsToItems(msg.Posts)
-		}
-
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
+		items := buildListItems(
+			&m.list, msg.IsAdditional, m.hasMore,
+			postsToItems(msg.Posts),
+		)
+		return m, m.list.SetItems(items)
 
 	case messages.FeedErrorMsg:
 		m.loading = false

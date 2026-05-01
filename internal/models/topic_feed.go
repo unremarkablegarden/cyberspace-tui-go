@@ -151,26 +151,11 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = msg.Cursor != ""
 		m.err = nil
 
-		var items []list.Item
-		if msg.IsAdditional {
-			for _, existing := range m.list.Items() {
-				if _, ok := existing.(LoadMoreItem); ok {
-					continue
-				}
-				items = append(items, existing)
-			}
-			for _, p := range msg.Posts {
-				items = append(items, PostItem{Post: p})
-			}
-		} else {
-			items = postsToItems(msg.Posts)
-		}
-
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
+		items := buildListItems(
+			&m.list, msg.IsAdditional, m.hasMore,
+			postsToItems(msg.Posts),
+		)
+		return m, m.list.SetItems(items)
 
 	case messages.TopicPostsLoadedErrMsg:
 		m.loading = false

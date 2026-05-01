@@ -180,24 +180,10 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = msg.Cursor != ""
 		m.user = msg.User
 
-		var items []list.Item
-		if msg.IsAdditional {
-			for _, existing := range m.list.Items() {
-				if _, ok := existing.(LoadMoreItem); ok {
-					continue
-				}
-				items = append(items, existing)
-			}
-			for _, p := range msg.Posts {
-				items = append(items, PostItem{Post: p})
-			}
-		} else {
-			items = postsToItems(msg.Posts)
-		}
-
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
+		items := buildListItems(
+			&m.list, msg.IsAdditional, m.hasMore,
+			postsToItems(msg.Posts),
+		)
 		cmd := m.list.SetItems(items)
 
 		// Fetch follow status for other users

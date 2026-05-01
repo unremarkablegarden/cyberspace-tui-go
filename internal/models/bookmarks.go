@@ -144,26 +144,11 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 
-		var items []list.Item
-		if msg.IsAdditional {
-			for _, existing := range m.list.Items() {
-				if _, ok := existing.(LoadMoreItem); ok {
-					continue
-				}
-				items = append(items, existing)
-			}
-			for _, b := range msg.Bookmarks {
-				items = append(items, BookmarkItem{Bookmark: b})
-			}
-		} else {
-			items = bookmarksToItems(msg.Bookmarks)
-		}
-
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
+		items := buildListItems(
+			&m.list, msg.IsAdditional, m.hasMore,
+			bookmarksToItems(msg.Bookmarks),
+		)
+		return m, m.list.SetItems(items)
 
 	case messages.BookmarksLoadedErrMsg:
 		m.loading = false

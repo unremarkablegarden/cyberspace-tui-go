@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
@@ -255,4 +256,36 @@ func ReplaceEmojis(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// buildListItems updates lists when added
+func buildListItems(
+	l *list.Model,
+	isAdditional bool,
+	hasMore bool,
+	newItems []list.Item,
+) []list.Item {
+
+	var base []list.Item
+
+	if isAdditional {
+		existing := l.Items()
+
+		base = make([]list.Item, 0, len(existing))
+		for _, it := range existing {
+			if _, isLoadMore := it.(LoadMoreItem); !isLoadMore {
+				base = append(base, it)
+			}
+		}
+	}
+
+	items := make([]list.Item, 0, len(base)+len(newItems)+1)
+	items = append(items, base...)
+	items = append(items, newItems...)
+
+	if hasMore {
+		items = append(items, LoadMoreItem{})
+	}
+
+	return items
 }

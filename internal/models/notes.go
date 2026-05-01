@@ -199,27 +199,12 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 		m.err = nil
-		var items []list.Item
-		if msg.IsAdditional {
 
-			for _, existing := range m.list.Items() {
-				if _, ok := existing.(LoadMoreItem); ok {
-					continue
-				}
-				items = append(items, existing)
-			}
-			for _, n := range msg.Notes {
-				items = append(items, NoteItem{Note: n})
-			}
-		} else {
-			items = notesToItems(msg.Notes)
-		}
-
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
+		items := buildListItems(
+			&m.list, msg.IsAdditional, m.hasMore,
+			notesToItems(msg.Notes),
+		)
+		return m, m.list.SetItems(items)
 
 	case messages.NotesLoadedErrMsg:
 		m.loading = false
