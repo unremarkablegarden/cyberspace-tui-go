@@ -8,4 +8,6 @@ type (
 	SwitchToPost          struct{ Post entities.Post }
 	SwitchToNotifications struct{}
 	SwitchToBookmarks     struct{}
+	SwitchToTopics        struct{}
+	SwitchToTopicFeed     struct{ Topic entities.Topic }
 )

@@ -7,3 +7,4 @@ Stuff found while working on the code
 - [ ] Same error as empty post id in bookmarks
 - [ ] No username when post model added
 - [ ] Some list paginated events uses similar logic, maybe a generic function can help with that
+- [ ] Topics shows 0 posts counter for all topics

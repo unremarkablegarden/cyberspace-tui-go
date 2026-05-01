@@ -73,6 +73,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		bookmarksModel := models.NewBookmarksModel(mm.CyberClient)
 		mm.ActiveModel = bookmarksModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToTopics:
+		topicsModel := models.NewTopicsModel(mm.CyberClient)
+		mm.ActiveModel = topicsModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
 		// Send message to active model to handle it there

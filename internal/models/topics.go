@@ -14,26 +14,11 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// OpenTopicsMsg is sent when the user wants to browse topics
-type OpenTopicsMsg struct{}
-
-// OpenTopicFeedMsg is sent when the user selects a topic
-type OpenTopicFeedMsg struct{ Topic entities.Topic }
-
-// BackFromTopicsMsg is sent when navigating back from topics
-type BackFromTopicsMsg struct{}
-
-// TopicsLoadedMsg is sent when topics are fetched
-type TopicsLoadedMsg struct{ Topics []entities.Topic }
-
-// TopicsErrorMsg is sent when fetching topics fails
-type TopicsErrorMsg struct{ Err error }
-
 // ─── Topic list item ────────────────────────────────────────────────────────
-
 type TopicItem struct{ Topic entities.Topic }
 
 func (t TopicItem) FilterValue() string { return t.Topic.Name }
@@ -135,11 +120,11 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackFromTopicsMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Open):
 			if it, ok := m.list.SelectedItem().(TopicItem); ok {
 				topic := it.Topic
-				return m, func() tea.Msg { return OpenTopicFeedMsg{Topic: topic} }
+				return m, func() tea.Msg { return messages.SwitchToTopicFeed{Topic: topic} }
 			}
 		}
 
@@ -153,7 +138,7 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case TopicsLoadedMsg:
+	case messages.TopicsLoadedMsg:
 		m.loading = false
 		items := make([]list.Item, len(msg.Topics))
 		for i, t := range msg.Topics {
@@ -162,7 +147,7 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case TopicsErrorMsg:
+	case messages.TopicsLoadedErrMsg:
 		m.loading = false
 		m.err = msg.Err
 
@@ -230,8 +215,8 @@ func (m TopicsModel) fetchTopics() tea.Cmd {
 	return func() tea.Msg {
 		topics, err := m.client.FetchTopics()
 		if err != nil {
-			return TopicsErrorMsg{Err: err}
+			return messages.TopicsLoadedErrMsg{Err: err}
 		}
-		return TopicsLoadedMsg{Topics: topics}
+		return messages.TopicsLoadedMsg{Topics: topics}
 	}
 }
