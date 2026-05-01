@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -103,11 +104,11 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-	case LoginSuccessMsg:
+	case messages.LoginSuccessMsg:
 		m.loading = false
-		return m, nil
+		return m, m.loginSuccess
 
-	case LoginErrorMsg:
+	case messages.LoginErrorMsg:
 		m.loading = false
 		m.err = msg.Err
 		return m, nil
@@ -248,6 +249,10 @@ func (m *LoginModel) SetSize(width, height int) {
 	m.height = height
 }
 
+func (m *LoginModel) loginSuccess() tea.Msg {
+	return messages.SwitchToFeed{}
+}
+
 func (m *LoginModel) updateFocus() tea.Cmd {
 	if m.focusIndex == 0 {
 		m.passwordInput.Blur()
@@ -261,10 +266,10 @@ func (m LoginModel) attemptLogin() tea.Cmd {
 	return func() tea.Msg {
 		resp, err := m.client.SignIn(m.emailInput.Value(), m.passwordInput.Value())
 		if err != nil {
-			return LoginErrorMsg{Err: err}
+			return messages.LoginErrorMsg{Err: err}
 		}
 
-		return LoginSuccessMsg{
+		return messages.LoginSuccessMsg{
 			IDToken:      resp.IDToken,
 			RefreshToken: resp.RefreshToken,
 		}

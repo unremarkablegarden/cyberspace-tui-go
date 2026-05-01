@@ -27,26 +27,44 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	// Keys supported
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch msg.Type {
+		case tea.KeyCtrlC:
 			return mm, tea.Quit
-		case "m":
-			// open menu
-			return mm, nil
-			// Navigation or other stuff by keypressing
-			// send it to the active model
 		default:
 			updatedModel, command := mm.ActiveModel.Update(msg)
 			mm.ActiveModel = updatedModel
 			return mm, command
 		}
 
+		// Special messages
+	case messages.LoginSuccessMsg:
+		mm.Config.Auth.IDToken = msg.IDToken
+		mm.Config.Auth.RefreshToken = msg.RefreshToken
+		mm.Config.Auth.SetExpiry(DefaultTokenLifetimeSecs)
+
+		mm.CyberClient.IDToken = msg.IDToken
+
+		if saveErr := mm.SaveAuthInfo(); saveErr != nil {
+			panic(fmt.Sprintf("Error saving auth info: %s", saveErr.Error()))
+		}
+
+		updatedModel, command := mm.ActiveModel.Update(msg)
+		mm.ActiveModel = updatedModel
+		return mm, command
+
 		// Switch models stuff
 	case messages.SwitchToFeed:
 		feedModel := models.NewFeedModel(mm.CyberClient)
 		mm.ActiveModel = feedModel
-		return mm, mm.ActiveModel.Init()
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToPost:
+		postModel := models.NewPostDetailModelWithPost(
+			mm.CyberClient,
+			msg.Post,
+			"",
+		)
+		mm.ActiveModel = postModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
 	case messages.SwitchToThemePicker:
 

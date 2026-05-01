@@ -50,13 +50,27 @@ func (mm *MainModel) loadAuth() {
 
 		mm.Config.Auth.SetExpiry(DefaultTokenLifetimeSecs)
 
-		authMarshal, authMarshalErr := json.Marshal(mm.Config.Auth)
-		if authMarshalErr != nil {
-			panic(fmt.Sprintf("Error marshalling auth struct: %s", authMarshalErr.Error()))
+		if saveErr := mm.SaveAuthInfo(); saveErr != nil {
+			panic(fmt.Sprintf("Error saving auth info: %s", saveErr.Error()))
 		}
-
-		saveFile(authMarshal, mm.Config.ConfigPath, DefaultAuthFilename)
 	}
+}
+
+func (mm *MainModel) SaveAuthInfo() error {
+	authMarshal, authMarshalErr := json.Marshal(mm.Config.Auth)
+	if authMarshalErr != nil {
+		return authMarshalErr
+	}
+
+	if saveAuthErr := saveFile(
+		authMarshal,
+		mm.Config.ConfigPath,
+		DefaultAuthFilename,
+	); saveAuthErr != nil {
+		return saveAuthErr
+	}
+
+	return nil
 }
 
 // IsExpired returns true if the token has expired or will expire soon (within 5 min)

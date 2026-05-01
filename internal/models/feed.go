@@ -13,25 +13,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// PostsLoadedMsg is sent when posts are fetched
-type PostsLoadedMsg struct {
-	Posts  []entities.Post
-	Cursor string
-}
-
-// MorePostsLoadedMsg is sent when more posts are loaded
-type MorePostsLoadedMsg struct {
-	Posts  []entities.Post
-	Cursor string
-}
-
-// PostsErrorMsg is sent when fetching posts fails
-type PostsErrorMsg struct {
-	Err error
-}
 
 // OpenPostMsg is sent when user wants to view a post
 type OpenPostMsg struct {
@@ -40,15 +24,6 @@ type OpenPostMsg struct {
 
 // OpenComposeMsg is sent when the user wants to create a new post
 type OpenComposeMsg struct{}
-
-// RefreshFeedMsg triggers a feed reload
-type RefreshFeedMsg struct{}
-
-// OpenBookmarksMsg is sent when the user wants to view bookmarks
-type OpenBookmarksMsg struct{}
-
-// OpenNotificationsMsg is sent when the user wants to view notifications
-type OpenNotificationsMsg struct{}
 
 // LogoutMsg is sent when the user wants to log out
 type LogoutMsg struct{}
@@ -135,9 +110,9 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.NewPost):
 			return m, func() tea.Msg { return OpenComposeMsg{} }
 		case key.Matches(msg, m.keys.Bookmarks):
-			return m, func() tea.Msg { return OpenBookmarksMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToBookmarks{} }
 		case key.Matches(msg, m.keys.Notifications):
-			return m, func() tea.Msg { return OpenNotificationsMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToNotifications{} }
 		case key.Matches(msg, m.keys.Topics):
 			return m, func() tea.Msg { return OpenTopicsMsg{} }
 		case key.Matches(msg, m.keys.Notes):
@@ -152,7 +127,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch it := item.(type) {
 				case PostItem:
 					return m, func() tea.Msg {
-						return OpenPostMsg{Post: it.Post}
+						return messages.SwitchToPost{Post: it.Post}
 					}
 				case LoadMoreItem:
 					if !m.loadingMore {
@@ -163,7 +138,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case RefreshFeedMsg:
+	case messages.RefreshFeedMsg:
 		m.loading = true
 		m.err = nil
 		return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
@@ -176,7 +151,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
 						return m, func() tea.Msg {
-							return OpenPostMsg{Post: post}
+							return messages.SwitchToPost{Post: post}
 						}
 					}
 				}
@@ -199,40 +174,34 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case PostsLoadedMsg:
+	case messages.FeedLoadedMsg:
 		m.loading = false
 		m.err = nil
-		items := postsToItems(msg.Posts)
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
 
-	case MorePostsLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
-		// Build new full items list
 		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue // remove old load-more sentinel
+		if msg.IsAdditional {
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue // remove old load-more sentinel
+				}
+				items = append(items, existing)
 			}
-			items = append(items, existing)
+			for _, p := range msg.Posts {
+				items = append(items, PostItem{Post: p})
+			}
+		} else {
+			items = postsToItems(msg.Posts)
 		}
-		for _, p := range msg.Posts {
-			items = append(items, PostItem{Post: p})
-		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case PostsErrorMsg:
+	case messages.FeedErrorMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
@@ -251,7 +220,6 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
 	}
-
 	return m, nil
 }
 
@@ -334,9 +302,9 @@ func (m FeedModel) fetchPosts() tea.Cmd {
 	return func() tea.Msg {
 		posts, cursor, err := m.client.FetchPosts(30)
 		if err != nil {
-			return PostsErrorMsg{Err: err}
+			return messages.FeedErrorMsg{Err: err}
 		}
-		return PostsLoadedMsg{Posts: posts, Cursor: cursor}
+		return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor}
 	}
 }
 
@@ -344,9 +312,9 @@ func (m FeedModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		posts, cursor, err := m.client.FetchMorePosts(30, m.nextCursor)
 		if err != nil {
-			return PostsErrorMsg{Err: err}
+			return messages.FeedErrorMsg{Err: err}
 		}
-		return MorePostsLoadedMsg{Posts: posts, Cursor: cursor}
+		return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
 	}
 }
 
