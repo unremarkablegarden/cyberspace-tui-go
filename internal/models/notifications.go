@@ -266,14 +266,6 @@ func (m NotificationsModel) markAllRead() tea.Cmd {
 	}
 }
 
-func notificationsToItems(notifs []entities.Notification) []list.Item {
-	items := make([]list.Item, len(notifs))
-	for i, n := range notifs {
-		items[i] = NotificationItem{Notification: n}
-	}
-	return items
-}
-
 // itoa converts an int to string without importing strconv everywhere
 func itoa(n int) string {
 	if n == 0 {

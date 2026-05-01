@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
@@ -279,14 +278,4 @@ func (m BookmarksModel) deleteBookmark(bookmarkID string) tea.Cmd {
 		}
 		return messages.BookmarkRemovedMsg{BookmarkID: bookmarkID}
 	}
-}
-
-func bookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
-	items := make([]list.Item, 0, len(bookmarks))
-	for _, b := range bookmarks {
-		if !b.Post.Deleted {
-			items = append(items, BookmarkItem{Bookmark: b})
-		}
-	}
-	return items
 }

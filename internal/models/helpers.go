@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -287,5 +288,39 @@ func buildListItems(
 		items = append(items, LoadMoreItem{})
 	}
 
+	return items
+}
+
+func bookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
+	items := make([]list.Item, 0, len(bookmarks))
+	for _, b := range bookmarks {
+		if !b.Post.Deleted {
+			items = append(items, BookmarkItem{Bookmark: b})
+		}
+	}
+	return items
+}
+
+func postsToItems(posts []entities.Post) []list.Item {
+	items := make([]list.Item, len(posts))
+	for i, p := range posts {
+		items[i] = PostItem{Post: p}
+	}
+	return items
+}
+
+func notesToItems(notes []entities.Note) []list.Item {
+	items := make([]list.Item, len(notes))
+	for i, n := range notes {
+		items[i] = NoteItem{Note: n}
+	}
+	return items
+}
+
+func notificationsToItems(notifs []entities.Notification) []list.Item {
+	items := make([]list.Item, len(notifs))
+	for i, n := range notifs {
+		items[i] = NotificationItem{Notification: n}
+	}
 	return items
 }

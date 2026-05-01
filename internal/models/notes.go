@@ -332,11 +332,3 @@ func (m NotesModel) deleteNote(noteID string) tea.Cmd {
 		return messages.NoteDeleteMsg{NoteID: noteID}
 	}
 }
-
-func notesToItems(notes []entities.Note) []list.Item {
-	items := make([]list.Item, len(notes))
-	for i, n := range notes {
-		items[i] = NoteItem{Note: n}
-	}
-	return items
-}

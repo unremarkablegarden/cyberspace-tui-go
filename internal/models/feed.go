@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
@@ -293,12 +292,4 @@ func (m FeedModel) fetchMorePosts() tea.Cmd {
 		}
 		return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
 	}
-}
-
-func postsToItems(posts []entities.Post) []list.Item {
-	items := make([]list.Item, len(posts))
-	for i, p := range posts {
-		items[i] = PostItem{Post: p}
-	}
-	return items
 }
