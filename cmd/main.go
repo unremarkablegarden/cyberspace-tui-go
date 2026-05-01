@@ -59,7 +59,6 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if saveErr := mm.SaveAuthInfo(); saveErr != nil {
 			panic(fmt.Sprintf("Error saving auth info: %s", saveErr.Error()))
 		}
-
 		return mm, nil
 
 	case messages.ThemeChangedMsg:
@@ -70,6 +69,13 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return mm, func() tea.Msg { return messages.SwitchToFeed{} }
+
+	case messages.LogoutMsg:
+		if rmErr := mm.RemoveAuthInfo(); rmErr != nil {
+			panic(fmt.Sprintf("Error removing auth info: %s", rmErr.Error()))
+		}
+
+		return mm, tea.Quit
 
 		// Switch models stuff
 	case messages.SwitchToPostDetail:

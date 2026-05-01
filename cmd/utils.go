@@ -42,3 +42,14 @@ func saveFile(data []byte, path string, filename string) error {
 
 	return os.WriteFile(filepath.Join(path, filename), data, 0600)
 }
+
+func removeConfig(path string, filename string) error {
+	if rmFileErr := os.Remove(filepath.Join(path, filename)); rmFileErr != nil {
+		if os.IsNotExist(rmFileErr) {
+			return nil
+		}
+		return rmFileErr
+	}
+
+	return nil
+}

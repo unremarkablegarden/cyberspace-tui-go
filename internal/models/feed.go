@@ -17,9 +17,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// LogoutMsg is sent when the user wants to log out
-type LogoutMsg struct{}
-
 // FeedModel is the post feed screen
 type FeedModel struct {
 	list        list.Model
@@ -101,7 +98,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
 		case key.Matches(msg, m.keys.Logout):
-			return m, func() tea.Msg { return LogoutMsg{} }
+			return m, func() tea.Msg { return messages.LogoutMsg{} }
 		case key.Matches(msg, m.keys.NewPost):
 			return m, func() tea.Msg { return messages.SwitchToCompose{} }
 		case key.Matches(msg, m.keys.Bookmarks):

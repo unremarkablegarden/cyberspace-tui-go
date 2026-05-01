@@ -73,6 +73,10 @@ func (mm *MainModel) SaveAuthInfo() error {
 	return nil
 }
 
+func (mm *MainModel) RemoveAuthInfo() error {
+	return removeConfig(mm.Config.ConfigPath, DefaultAuthFilename)
+}
+
 // IsExpired returns true if the token has expired or will expire soon (within 5 min)
 func (aa *appAuth) IsExpired() bool {
 	if aa == nil || aa.IDToken == "" {
