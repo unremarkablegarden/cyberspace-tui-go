@@ -95,7 +95,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch it := m.list.SelectedItem().(type) {
 			case PostItem:
 				post := it.Post
-				return m, func() tea.Msg { return OpenPostMsg{Post: post} }
+				return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -110,7 +110,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if pi, ok := item.(PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
-						return m, func() tea.Msg { return OpenPostMsg{Post: post} }
+						return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
 					}
 				}
 			}

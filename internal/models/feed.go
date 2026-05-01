@@ -17,11 +17,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// OpenPostMsg is sent when user wants to view a post
-type OpenPostMsg struct {
-	Post entities.Post
-}
-
 // OpenComposeMsg is sent when the user wants to create a new post
 type OpenComposeMsg struct{}
 
