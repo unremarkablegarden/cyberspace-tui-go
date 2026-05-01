@@ -17,6 +17,7 @@ Stuff found while working on the code
 - [ ] Some list paginated events uses similar logic, maybe a generic function can help with that
 - [ ] Update help keys
 - [ ] Note composer "IsEdit" flag works only to edit a note, if "IsEdit" is false, falls back to "new note" instead of open a note in read mode or something
+- [ ] Logout functionality not implemented
 
 - [ ] Move *_items to be more clear
 

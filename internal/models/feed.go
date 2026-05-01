@@ -17,9 +17,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// OpenComposeMsg is sent when the user wants to create a new post
-type OpenComposeMsg struct{}
-
 // LogoutMsg is sent when the user wants to log out
 type LogoutMsg struct{}
 

@@ -14,17 +14,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-// LoginSuccessMsg is sent when login succeeds
-type LoginSuccessMsg struct {
-	IDToken      string
-	RefreshToken string
-}
-
-// LoginErrorMsg is sent when login fails
-type LoginErrorMsg struct {
-	Err error
-}
-
 // LoginModel is the login screen
 type LoginModel struct {
 	emailInput    textinput.Model

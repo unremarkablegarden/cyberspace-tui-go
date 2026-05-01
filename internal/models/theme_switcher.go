@@ -18,9 +18,6 @@ type ThemeChangedMsg struct {
 	ThemeKey string
 }
 
-// ThemeSwitcherClosedMsg is sent when the user closes the theme switcher
-type ThemeSwitcherClosedMsg struct{}
-
 // ThemeSwitcherModel is the popup modal for switching themes
 type ThemeSwitcherModel struct {
 	themes        []styles.ThemeDefinition
