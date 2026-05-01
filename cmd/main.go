@@ -63,17 +63,27 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return mm, nil
 
 		// Switch models stuff
-	case messages.SwitchToFeed:
-		feedModel := models.NewFeedModel(mm.CyberClient)
-		mm.ActiveModel = feedModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
-	case messages.SwitchToPost:
+	case messages.SwitchToPostDetail:
 		postDetailModel := models.NewPostDetailModel(
 			mm.CyberClient,
 			msg.Post,
 			"",
+			msg.BackMessage,
 		)
 		mm.ActiveModel = postDetailModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToProfile:
+		profileModel := models.NewProfileModel(
+			mm.CyberClient,
+			msg.Username,
+			mm.Config.Auth.Username,
+			msg.BackMessage,
+		)
+		mm.ActiveModel = profileModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToFeed:
+		feedModel := models.NewFeedModel(mm.CyberClient)
+		mm.ActiveModel = feedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
 		notificationsModel := models.NewNotificationsModel(mm.CyberClient)
@@ -90,10 +100,6 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SwitchToTopicFeed:
 		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, msg.Topic)
 		mm.ActiveModel = topicFeedModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
-	case messages.SwitchToProfile:
-		profileModel := models.NewProfileModel(mm.CyberClient, msg.Username, mm.Config.Auth.Username)
-		mm.ActiveModel = profileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToCompose:
 		composeModel := models.NewComposeModel(mm.CyberClient)
@@ -191,34 +197,6 @@ func (m Model) Init() tea.Cmd {
 
 	// Always request window size first
 	cmds = append(cmds, tea.WindowSize())
-
-	switch m.state {
-	case StateLogin:
-		cmds = append(cmds, m.loginModel.Init())
-	case StateFeed:
-		cmds = append(cmds, m.feedModel.Init())
-	case StatePostDetail:
-		cmds = append(cmds, m.postDetailModel.Init())
-	case StateCompose:
-		cmds = append(cmds, m.composeModel.Init())
-	case StateBookmarks:
-		cmds = append(cmds, m.bookmarksModel.Init())
-	case StateNotifications:
-		cmds = append(cmds, m.notificationsModel.Init())
-	case StateProfile:
-		cmds = append(cmds, m.profileModel.Init())
-	case StateTopics:
-		cmds = append(cmds, m.topicsModel.Init())
-	case StateTopicFeed:
-		cmds = append(cmds, m.topicFeedModel.Init())
-	case StateEditProfile:
-		cmds = append(cmds, m.editProfileModel.Init())
-	case StateNotes:
-		cmds = append(cmds, m.notesModel.Init())
-	case StateNoteCompose:
-		cmds = append(cmds, m.noteComposeModel.Init())
-	}
-
 	return tea.Batch(cmds...)
 }
 

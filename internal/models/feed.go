@@ -122,7 +122,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch it := item.(type) {
 				case PostItem:
 					return m, func() tea.Msg {
-						return messages.SwitchToPost{Post: it.Post}
+						return messages.SwitchToPostDetail{Post: it.Post}
 					}
 				case LoadMoreItem:
 					if !m.loadingMore {
@@ -146,7 +146,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
 						return m, func() tea.Msg {
-							return messages.SwitchToPost{Post: post}
+							return messages.SwitchToPostDetail{Post: post}
 						}
 					}
 				}

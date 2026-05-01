@@ -100,7 +100,10 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if n.PostID != "" {
 					if p, postErr := m.client.FetchPost(n.PostID); postErr == nil {
 						cmds = append(cmds, func() tea.Msg {
-							return messages.SwitchToPost{Post: *p}
+							return messages.SwitchToPostDetail{
+								Post:        *p,
+								BackMessage: messages.SwitchToNotifications{},
+							}
 						})
 					}
 				}

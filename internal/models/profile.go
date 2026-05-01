@@ -39,6 +39,7 @@ type ProfileModel struct {
 	height          int
 	keys            ProfileKeyMap
 	help            help.Model
+	prevMsg         messages.PrevMessage
 	// follow state
 	isFollowing   bool
 	followID      string
@@ -47,7 +48,7 @@ type ProfileModel struct {
 }
 
 // NewProfileModel creates a new profile screen for the given username
-func NewProfileModel(client *api.Client, username, currentUsername string) ProfileModel {
+func NewProfileModel(client *api.Client, username, currentUsername string, prevMsg messages.PrevMessage) ProfileModel {
 	delegate := PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -77,6 +78,7 @@ func NewProfileModel(client *api.Client, username, currentUsername string) Profi
 		loading:         true,
 		keys:            NewProfileKeyMap(),
 		help:            h,
+		prevMsg:         prevMsg,
 	}
 }
 
@@ -97,7 +99,12 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return messages.SwitchToFeed{} }
+			return m, func() tea.Msg {
+				if m.prevMsg != nil {
+					return m.prevMsg
+				}
+				return messages.SwitchToFeed{}
+			}
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -117,7 +124,12 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch it := m.list.SelectedItem().(type) {
 			case PostItem:
 				post := it.Post
-				return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+				return m, func() tea.Msg {
+					return messages.SwitchToPostDetail{
+						Post:        post,
+						BackMessage: messages.SwitchToProfile{Username: m.username},
+					}
+				}
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -132,7 +144,12 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if pi, ok := item.(PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
-						return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+						return m, func() tea.Msg {
+							return messages.SwitchToPostDetail{
+								Post:        post,
+								BackMessage: messages.SwitchToProfile{Username: m.username},
+							}
+						}
 					}
 				}
 			}

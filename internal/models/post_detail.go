@@ -49,10 +49,11 @@ type PostDetailModel struct {
 	confirmingDelete bool
 	deleting         bool
 	deleteErr        error
+	prevMsg          messages.PrevMessage
 }
 
 // NewPostDetailModel creates a detail screen with post already loaded
-func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername string) PostDetailModel {
+func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername string, prevMsg messages.PrevMessage) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
@@ -67,6 +68,7 @@ func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername 
 		help:            h,
 		viewport:        vp,
 		replyInput:      newReplyTextarea(),
+		prevMsg:         prevMsg,
 	}
 	// Pre-populate viewport so post shows immediately while replies load
 	w, _ := SafeDimensions(0, 0)
@@ -132,7 +134,12 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return messages.SwitchToFeed{} }
+			return m, func() tea.Msg {
+				if m.prevMsg != nil {
+					return m.prevMsg
+				}
+				return messages.SwitchToFeed{}
+			}
 		case key.Matches(msg, m.keys.Delete):
 			if !m.deleting && m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
 				m.confirmingDelete = true
@@ -157,7 +164,15 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Profile):
 			username := m.post.AuthorUsername
-			return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
+			return m, func() tea.Msg {
+				return messages.SwitchToProfile{
+					Username: username,
+					BackMessage: messages.SwitchToPostDetail{
+						Post:        m.post,
+						BackMessage: m.prevMsg,
+					},
+				}
+			}
 		}
 		// Everything else (j/k, g/G, pgup/pgdn, etc.) falls through to viewport
 

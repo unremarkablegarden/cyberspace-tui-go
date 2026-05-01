@@ -89,13 +89,23 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Profile):
 			if item, ok := m.list.SelectedItem().(PostItem); ok {
 				username := item.Post.AuthorUsername
-				return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
+				return m, func() tea.Msg {
+					return messages.SwitchToProfile{
+						Username:    username,
+						BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
+					}
+				}
 			}
 		case key.Matches(msg, m.keys.Open):
 			switch it := m.list.SelectedItem().(type) {
 			case PostItem:
 				post := it.Post
-				return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+				return m, func() tea.Msg {
+					return messages.SwitchToPostDetail{
+						Post:        post,
+						BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
+					}
+				}
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -110,7 +120,12 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if pi, ok := item.(PostItem); ok {
 					if zone.Get(pi.Post.ID).InBounds(msg) {
 						post := pi.Post
-						return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+						return m, func() tea.Msg {
+							return messages.SwitchToPostDetail{
+								Post:        post,
+								BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
+							}
+						}
 					}
 				}
 			}

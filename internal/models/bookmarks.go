@@ -93,7 +93,12 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch it := m.list.SelectedItem().(type) {
 			case BookmarkItem:
 				post := it.Bookmark.Post
-				return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+				return m, func() tea.Msg {
+					return messages.SwitchToPostDetail{
+						Post:        post,
+						BackMessage: messages.SwitchToBookmarks{},
+					}
+				}
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -108,7 +113,12 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if bi, ok := item.(BookmarkItem); ok {
 					if zone.Get(bi.Bookmark.Post.ID).InBounds(msg) {
 						post := bi.Bookmark.Post
-						return m, func() tea.Msg { return messages.SwitchToPost{Post: post} }
+						return m, func() tea.Msg {
+							return messages.SwitchToPostDetail{
+								Post:        post,
+								BackMessage: messages.SwitchToBookmarks{},
+							}
+						}
 					}
 				}
 			}
