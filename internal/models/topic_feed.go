@@ -13,26 +13,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// TopicPostsLoadedMsg is sent when posts for a topic are fetched
-type TopicPostsLoadedMsg struct {
-	Posts  []entities.Post
-	Cursor string
-}
-
-// MoreTopicPostsLoadedMsg is sent when more topic posts are loaded
-type MoreTopicPostsLoadedMsg struct {
-	Posts  []entities.Post
-	Cursor string
-}
-
-// TopicPostsErrorMsg is sent when fetching topic posts fails
-type TopicPostsErrorMsg struct{ Err error }
-
-// BackFromTopicFeedMsg is sent when navigating back from a topic feed
-type BackFromTopicFeedMsg struct{}
 
 // TopicFeedModel is the topic-filtered post feed screen
 type TopicFeedModel struct {
@@ -98,7 +81,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackFromTopicFeedMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToTopics{} }
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
@@ -147,39 +130,34 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case TopicPostsLoadedMsg:
+	case messages.TopicPostsLoadedMsg:
 		m.loading = false
+		m.nextCursor = msg.Cursor
+		m.hasMore = msg.Cursor != ""
 		m.err = nil
-		items := postsToItems(msg.Posts)
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
 
-	case MoreTopicPostsLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
 		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue
+		if msg.IsAdditional {
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue
+				}
+				items = append(items, existing)
 			}
-			items = append(items, existing)
+			for _, p := range msg.Posts {
+				items = append(items, PostItem{Post: p})
+			}
+		} else {
+			items = postsToItems(msg.Posts)
 		}
-		for _, p := range msg.Posts {
-			items = append(items, PostItem{Post: p})
-		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case TopicPostsErrorMsg:
+	case messages.TopicPostsLoadedErrMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.err = msg.Err
@@ -253,9 +231,9 @@ func (m TopicFeedModel) fetchPosts() tea.Cmd {
 	return func() tea.Msg {
 		posts, cursor, err := m.client.FetchTopicPosts(m.topic.Name, 30)
 		if err != nil {
-			return TopicPostsErrorMsg{Err: err}
+			return messages.TopicPostsLoadedErrMsg{Err: err}
 		}
-		return TopicPostsLoadedMsg{Posts: posts, Cursor: cursor}
+		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor}
 	}
 }
 
@@ -263,8 +241,8 @@ func (m TopicFeedModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		posts, cursor, err := m.client.FetchMoreTopicPosts(m.topic.Name, 30, m.nextCursor)
 		if err != nil {
-			return TopicPostsErrorMsg{Err: err}
+			return messages.TopicPostsLoadedErrMsg{Err: err}
 		}
-		return MoreTopicPostsLoadedMsg{Posts: posts, Cursor: cursor}
+		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
 	}
 }

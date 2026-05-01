@@ -77,6 +77,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		topicsModel := models.NewTopicsModel(mm.CyberClient)
 		mm.ActiveModel = topicsModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToTopicFeed:
+		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, msg.Topic)
+		mm.ActiveModel = topicFeedModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
 		// Send message to active model to handle it there
