@@ -68,7 +68,7 @@ func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Close):
 			// Revert to original theme
 			_ = styles.ApplyTheme(m.originalTheme)
-			return m, func() tea.Msg { return ThemeSwitcherClosedMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Down):
 			if m.cursor < len(m.themes)-1 {
 				m.cursor++
@@ -82,9 +82,9 @@ func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Apply):
 			if m.cursor < len(m.themes) {
 				// Theme is already applied via preview, just confirm it
-				// selected := m.themes[m.cursor]
+				selected := m.themes[m.cursor]
 				return m, func() tea.Msg {
-					return messages.SwitchToFeed{}
+					return messages.ThemeChangedMsg{ThemeKey: selected.Key}
 				}
 			}
 		}

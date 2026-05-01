@@ -9,6 +9,7 @@ Stuff found while working on the code
 - [X] Topics shows 0 posts counter for all topics
 - [X] When open notifications panel, post id is always empty
 - [X] Same error as empty post id in bookmarks
+- [X] When theme changes, no file is being save to persist changes
 
 ## Stuff to fix
 - [ ] With current changes, each screen change triggers a new request (local cache?)
@@ -22,3 +23,4 @@ Stuff found while working on the code
 
 ## Stuff to do
 - [ ] Support images in terminals that support _TGP_
+- [ ] Expand button in feed screen

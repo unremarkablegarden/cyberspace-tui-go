@@ -54,3 +54,20 @@ func (mm *MainModel) loadTheme() {
 		}
 	}
 }
+
+func (mm *MainModel) SaveThemeInfo() error {
+	themeMarshal, themeMarshalErr := json.Marshal(mm.Config.Theme)
+	if themeMarshalErr != nil {
+		return themeMarshalErr
+	}
+
+	if saveThemeErr := saveFile(
+		themeMarshal,
+		mm.Config.ConfigPath,
+		DefaultThemeFilename,
+	); saveThemeErr != nil {
+		return saveThemeErr
+	}
+
+	return nil
+}

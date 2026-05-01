@@ -62,6 +62,15 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return mm, nil
 
+	case messages.ThemeChangedMsg:
+		mm.Config.Theme.Theme = msg.ThemeKey
+
+		if saveErr := mm.SaveThemeInfo(); saveErr != nil {
+			panic(fmt.Sprintf("Error saving theme info: %s", saveErr.Error()))
+		}
+
+		return mm, func() tea.Msg { return messages.SwitchToFeed{} }
+
 		// Switch models stuff
 	case messages.SwitchToPostDetail:
 		postDetailModel := models.NewPostDetailModel(
@@ -116,6 +125,8 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = updatedModel
 		return mm, command
 	}
+
+	return mm, nil
 }
 
 func (mm *MainModel) View() string {
@@ -164,9 +175,6 @@ const (
 	StateNotes
 	StateNoteCompose
 )
-
-// ownUsernameMsg is sent after fetching the current user's username post-login
-type ownUsernameMsg struct{ username string }
 
 // Model is the main application model
 type Model struct {
@@ -284,16 +292,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case models.ThemeSwitcherClosedMsg:
 			m.showThemeSwitcher = false
 			return m, nil
-
-		case ownUsernameMsg:
-			if m.config != nil && msg.username != "" {
-				m.config.Username = msg.username
-				if err := SaveConfig(m.config); err != nil {
-					log.Printf("Failed to save username: %v", err)
-				}
-			}
-			return m, nil
-		}
 
 		// Route to theme switcher if open
 		if m.showThemeSwitcher {
