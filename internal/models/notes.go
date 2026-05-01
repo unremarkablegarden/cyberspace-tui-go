@@ -166,7 +166,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch it := m.list.SelectedItem().(type) {
 			case NoteItem:
 				note := it.Note
-				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: false} }
+				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true

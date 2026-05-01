@@ -122,6 +122,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		notesModel := models.NewNotesModel(mm.CyberClient)
 		mm.ActiveModel = notesModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToNoteCompose:
+		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, msg.Note, msg.IsEdit)
+		mm.ActiveModel = noteComposeModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel()
 		mm.ActiveModel = themeSwitcherModel

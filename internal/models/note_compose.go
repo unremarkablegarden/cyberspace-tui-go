@@ -13,14 +13,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// NoteComposeDoneMsg is sent when the note compose screen closes
-type NoteComposeDoneMsg struct{ Saved bool }
-
-type noteSaveSuccessMsg struct{}
-type noteSaveErrorMsg struct{ Err error }
 
 // NoteComposeModel is the note create/edit screen
 type NoteComposeModel struct {
@@ -94,7 +89,7 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case msg.String() == "esc":
-			return m, func() tea.Msg { return NoteComposeDoneMsg{Saved: false} }
+			return m, func() tea.Msg { return messages.SwitchToNotes{} }
 		case msg.String() == "ctrl+s":
 			content := strings.TrimSpace(m.content.Value())
 			if content == "" {
@@ -136,10 +131,10 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case noteSaveSuccessMsg:
-		return m, func() tea.Msg { return NoteComposeDoneMsg{Saved: true} }
+	case messages.NoteComposeSaveMsg:
+		return m, func() tea.Msg { return messages.SwitchToNotes{} }
 
-	case noteSaveErrorMsg:
+	case messages.NoteComposeSaveErrMsg:
 		m.saving = false
 		m.err = msg.Err
 
@@ -185,9 +180,9 @@ func (m NoteComposeModel) saveNote(content string, topics []string) tea.Cmd {
 			_, err = m.client.CreateNote(content, topics)
 		}
 		if err != nil {
-			return noteSaveErrorMsg{Err: err}
+			return messages.NoteComposeSaveErrMsg{Err: err}
 		}
-		return noteSaveSuccessMsg{}
+		return messages.NoteComposeSaveMsg{}
 	}
 }
 
