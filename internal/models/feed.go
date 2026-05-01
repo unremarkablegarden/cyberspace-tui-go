@@ -88,6 +88,9 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch {
+		// temporal access while menu is implemented
+		case msg.String() == "t":
+			return m, func() tea.Msg { return messages.SwitchToThemeSwitcher{} }
 		case msg.String() == "esc":
 			// esc never quits — swallow it on the feed screen
 			return m, nil

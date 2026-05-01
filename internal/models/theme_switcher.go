@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -60,7 +61,7 @@ func (m ThemeSwitcherModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m ThemeSwitcherModel) Update(msg tea.Msg) (ThemeSwitcherModel, tea.Cmd) {
+func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -81,9 +82,9 @@ func (m ThemeSwitcherModel) Update(msg tea.Msg) (ThemeSwitcherModel, tea.Cmd) {
 		case key.Matches(msg, m.keys.Apply):
 			if m.cursor < len(m.themes) {
 				// Theme is already applied via preview, just confirm it
-				selected := m.themes[m.cursor]
+				// selected := m.themes[m.cursor]
 				return m, func() tea.Msg {
-					return ThemeChangedMsg{ThemeKey: selected.Key}
+					return messages.SwitchToFeed{}
 				}
 			}
 		}

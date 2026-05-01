@@ -105,7 +105,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		composeModel := models.NewComposeModel(mm.CyberClient)
 		mm.ActiveModel = composeModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
-	case messages.SwitchToThemePicker:
+	case messages.SwitchToThemeSwitcher:
+		themeSwitcherModel := models.NewThemeSwitcherModel()
+		mm.ActiveModel = themeSwitcherModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 
 		// Send message to active model to handle it there
 	default:
@@ -113,8 +116,6 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = updatedModel
 		return mm, command
 	}
-
-	return mm, nil
 }
 
 func (mm *MainModel) View() string {
