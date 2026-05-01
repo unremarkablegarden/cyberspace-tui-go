@@ -58,7 +58,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = feedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToPost:
-		postModel := models.NewPostDetailModelWithPost(
+		postModel := models.NewPostDetailModel(
 			mm.CyberClient,
 			msg.Post,
 			"",

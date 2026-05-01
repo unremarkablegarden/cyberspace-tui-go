@@ -14,46 +14,14 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-const headerHeight = 2 // title bar + blank line
-const footerHeight = 2 // divider + status line
-const hintHeight = 1   // contextual actions hint line
-
-// PostDetailLoadedMsg is sent when post and replies are loaded
-type PostDetailLoadedMsg struct {
-	Post    entities.Post
-	Replies []entities.Reply
-}
-
-// PostDetailErrorMsg is sent when loading fails
-type PostDetailErrorMsg struct {
-	Err error
-}
-
-// BackToFeedMsg is sent when user wants to go back
-type BackToFeedMsg struct{}
-
-// ReplyCreatedMsg is sent when a reply is successfully created
-type ReplyCreatedMsg struct{ ReplyID string }
-
-// ReplyErrorMsg is sent when creating a reply fails
-type ReplyErrorMsg struct{ Err error }
-
-// BookmarkAddedMsg is sent when a post is successfully bookmarked
-type BookmarkAddedMsg struct{ BookmarkID string }
-
-// BookmarkAddErrorMsg is sent when bookmarking a post fails
-type BookmarkAddErrorMsg struct{ Err error }
-
+const headerHeight = 2  // title bar + blank line
+const footerHeight = 2  // divider + status line
+const hintHeight = 1    // contextual actions hint line
 const composeHeight = 6 // textarea height including border
-
-// postDeletedMsg is sent internally when a delete succeeds
-type postDeletedMsg struct{}
-
-// postDeleteErrMsg is sent internally when a delete fails
-type postDeleteErrMsg struct{ Err error }
 
 // PostDetailModel is the post detail screen
 type PostDetailModel struct {
@@ -83,53 +51,8 @@ type PostDetailModel struct {
 	deleteErr        error
 }
 
-func newReplyTextarea() textarea.Model {
-	ta := textarea.New()
-	ta.Placeholder = "Type your reply..."
-	ta.SetHeight(3)
-	ta.SetWidth(60)
-	ta.CharLimit = 32768
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(styles.ColorBgSelect)
-	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(styles.ColorNormal)
-	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
-	ta.FocusedStyle.EndOfBuffer = lipgloss.NewStyle().Foreground(styles.ColorDark)
-	ta.BlurredStyle = ta.FocusedStyle
-	ta.Blur()
-	return ta
-}
-
-func newDetailViewport() viewport.Model {
-	vp := viewport.New(0, 0)
-	vp.MouseWheelEnabled = true
-	// Override default keymap: remove 'b' from PageUp (we use it for "back")
-	km := viewport.DefaultKeyMap()
-	km.PageUp = key.NewBinding(key.WithKeys("pgup"))
-	km.PageDown = key.NewBinding(key.WithKeys("f", "pgdown", " "))
-	km.HalfPageUp = key.NewBinding(key.WithKeys("u", "ctrl+u"))
-	km.HalfPageDown = key.NewBinding(key.WithKeys("d", "ctrl+d"))
-	vp.KeyMap = km
-	return vp
-}
-
-// NewPostDetailModel creates a new post detail screen
-func NewPostDetailModel(client *api.Client, postID, currentUsername string) PostDetailModel {
-	h := help.New()
-	h.Styles = styles.HelpStyles()
-	return PostDetailModel{
-		client:          client,
-		postID:          postID,
-		currentUsername: currentUsername,
-		spinner:         NewSpinner(),
-		loading:         true,
-		keys:            NewPostDetailKeyMap(),
-		help:            h,
-		viewport:        newDetailViewport(),
-		replyInput:      newReplyTextarea(),
-	}
-}
-
-// NewPostDetailModelWithPost creates a detail screen with post already loaded
-func NewPostDetailModelWithPost(client *api.Client, post entities.Post, currentUsername string) PostDetailModel {
+// NewPostDetailModel creates a detail screen with post already loaded
+func NewPostDetailModel(client *api.Client, post entities.Post, currentUsername string) PostDetailModel {
 	h := help.New()
 	h.Styles = styles.HelpStyles()
 	vp := newDetailViewport()
@@ -209,7 +132,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackToFeedMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Delete):
 			if !m.deleting && m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
 				m.confirmingDelete = true
@@ -265,7 +188,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 
-	case PostDetailLoadedMsg:
+	case messages.PostDetailLoadedMsg:
 		m.loading = false
 		m.post = msg.Post
 		m.replies = msg.Replies
@@ -273,11 +196,11 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(m.buildContent(w))
 		m.viewport.GotoTop()
 
-	case PostDetailErrorMsg:
+	case messages.PostDetailErrorMsg:
 		m.loading = false
 		m.err = msg.Err
 
-	case ReplyCreatedMsg:
+	case messages.PostReplyCreatedMsg:
 		m.replySending = false
 		m.composing = false
 		m.replyInput.Reset()
@@ -287,25 +210,25 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
 
-	case ReplyErrorMsg:
+	case messages.PostReplyCreatedErrMsg:
 		m.replySending = false
 		m.replyErr = msg.Err
 
-	case BookmarkAddedMsg:
+	case messages.PostBookmarkAddedMsg:
 		m.bookmarking = false
 		m.bookmarked = true
 		m.post.BookmarksCount++
 		w, _ := SafeDimensions(m.width, m.height)
 		m.viewport.SetContent(m.buildContent(w))
 
-	case BookmarkAddErrorMsg:
+	case messages.PostBookmarkAddedErrMsg:
 		m.bookmarking = false
 		m.bookmarkErr = msg.Err
 
-	case postDeletedMsg:
-		return m, func() tea.Msg { return BackToFeedMsg{} }
+	case messages.PostDeleteMsg:
+		return m, func() tea.Msg { return messages.SwitchToFeed{} }
 
-	case postDeleteErrMsg:
+	case messages.PostDeleteErrMsg:
 		m.deleting = false
 		m.deleteErr = msg.Err
 
@@ -556,9 +479,9 @@ func renderReplyNode(node *replyNode, depth int, isLast bool, contentWidth int) 
 func (m PostDetailModel) deletePost() tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.DeletePost(m.postID); err != nil {
-			return postDeleteErrMsg{Err: err}
+			return messages.PostDeleteErrMsg{Err: err}
 		}
-		return postDeletedMsg{}
+		return messages.PostDeleteMsg{}
 	}
 }
 
@@ -566,9 +489,9 @@ func (m PostDetailModel) addBookmark() tea.Cmd {
 	return func() tea.Msg {
 		id, err := m.client.CreateBookmark(m.postID)
 		if err != nil {
-			return BookmarkAddErrorMsg{Err: err}
+			return messages.PostBookmarkAddedErrMsg{Err: err}
 		}
-		return BookmarkAddedMsg{BookmarkID: id}
+		return messages.PostBookmarkAddedMsg{BookmarkID: id}
 	}
 }
 
@@ -576,9 +499,9 @@ func (m PostDetailModel) sendReply(content string) tea.Cmd {
 	return func() tea.Msg {
 		replyID, err := m.client.CreateReply(m.postID, content)
 		if err != nil {
-			return ReplyErrorMsg{Err: err}
+			return messages.PostReplyCreatedErrMsg{Err: err}
 		}
-		return ReplyCreatedMsg{ReplyID: replyID}
+		return messages.PostReplyCreatedMsg{ReplyID: replyID}
 	}
 }
 
@@ -713,20 +636,12 @@ func renderBox(title, content string, width int) string {
 func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
 	return func() tea.Msg {
 		post := m.post
-		if post.ID == "" {
-			p, err := m.client.FetchPost(m.postID)
-			if err != nil {
-				return PostDetailErrorMsg{Err: err}
-			}
-			post = *p
-		}
-
 		replies, err := m.client.FetchReplies(m.postID)
 		if err != nil {
-			return PostDetailErrorMsg{Err: err}
+			return messages.PostDetailErrorMsg{Err: err}
 		}
 
-		return PostDetailLoadedMsg{Post: post, Replies: replies}
+		return messages.PostDetailLoadedMsg{Post: post, Replies: replies}
 	}
 }
 
@@ -744,4 +659,32 @@ func (m *PostDetailModel) SetSize(width, height int) {
 	m.viewport.Width = width
 	m.viewport.Height = vpHeight
 	m.ready = true
+}
+
+func newReplyTextarea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Type your reply..."
+	ta.SetHeight(3)
+	ta.SetWidth(60)
+	ta.CharLimit = 32768
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(styles.ColorBgSelect)
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(styles.ColorNormal)
+	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	ta.FocusedStyle.EndOfBuffer = lipgloss.NewStyle().Foreground(styles.ColorDark)
+	ta.BlurredStyle = ta.FocusedStyle
+	ta.Blur()
+	return ta
+}
+
+func newDetailViewport() viewport.Model {
+	vp := viewport.New(0, 0)
+	vp.MouseWheelEnabled = true
+	// Override default keymap: remove 'b' from PageUp (we use it for "back")
+	km := viewport.DefaultKeyMap()
+	km.PageUp = key.NewBinding(key.WithKeys("pgup"))
+	km.PageDown = key.NewBinding(key.WithKeys("f", "pgdown", " "))
+	km.HalfPageUp = key.NewBinding(key.WithKeys("u", "ctrl+u"))
+	km.HalfPageDown = key.NewBinding(key.WithKeys("d", "ctrl+d"))
+	vp.KeyMap = km
+	return vp
 }
