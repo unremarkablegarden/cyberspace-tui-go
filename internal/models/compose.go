@@ -13,17 +13,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// PostCreatedMsg is sent when a post is successfully created
-type PostCreatedMsg struct{ PostID string }
-
-// PostCreateErrorMsg is sent when creating a post fails
-type PostCreateErrorMsg struct{ Err error }
-
-// ComposeBackMsg is sent when the user wants to leave the compose screen
-type ComposeBackMsg struct{}
 
 // ComposeKeyMap defines keybindings for the compose screen
 type ComposeKeyMap struct {
@@ -122,7 +114,7 @@ func (m ComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
-			return m, func() tea.Msg { return ComposeBackMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Send):
 			content := strings.TrimSpace(m.content.Value())
 			if content == "" {
@@ -164,10 +156,10 @@ func (m ComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case PostCreatedMsg:
-		return m, func() tea.Msg { return ComposeBackMsg{} }
+	case messages.PostCreateMsg:
+		return m, func() tea.Msg { return messages.SwitchToFeed{} }
 
-	case PostCreateErrorMsg:
+	case messages.PostCreateErrMsg:
 		m.sending = false
 		m.err = msg.Err
 
@@ -208,9 +200,9 @@ func (m ComposeModel) sendPost(content string, topics []string) tea.Cmd {
 	return func() tea.Msg {
 		postID, err := m.client.CreatePost(content, topics)
 		if err != nil {
-			return PostCreateErrorMsg{Err: err}
+			return messages.PostCreateErrMsg{Err: err}
 		}
-		return PostCreatedMsg{PostID: postID}
+		return messages.PostCreateMsg{PostID: postID}
 	}
 }
 

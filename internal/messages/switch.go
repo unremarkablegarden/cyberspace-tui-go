@@ -11,4 +11,5 @@ type (
 	SwitchToTopics        struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
 	SwitchToProfile       struct{ Username string }
+	SwitchToCompose       struct{}
 )

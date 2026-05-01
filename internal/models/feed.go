@@ -103,7 +103,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Logout):
 			return m, func() tea.Msg { return LogoutMsg{} }
 		case key.Matches(msg, m.keys.NewPost):
-			return m, func() tea.Msg { return OpenComposeMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToCompose{} }
 		case key.Matches(msg, m.keys.Bookmarks):
 			return m, func() tea.Msg { return messages.SwitchToBookmarks{} }
 		case key.Matches(msg, m.keys.Notifications):

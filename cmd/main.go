@@ -85,6 +85,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		profileModel := models.NewProfileModel(mm.CyberClient, msg.Username, "")
 		mm.ActiveModel = profileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToCompose:
+		composeModel := models.NewComposeModel(mm.CyberClient)
+		mm.ActiveModel = composeModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemePicker:
 
 		// Send message to active model to handle it there
