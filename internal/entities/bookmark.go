@@ -4,7 +4,7 @@ import "time"
 
 // Bookmark represents a saved post
 type Bookmark struct {
-	ID        string    `json:"id"`
+	ID        string    `json:"bookmarkId"`
 	PostID    string    `json:"postId"`
 	UserID    string    `json:"userId"`
 	Type      string    `json:"type"`
