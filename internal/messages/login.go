@@ -6,4 +6,9 @@ type (
 		RefreshToken string
 	}
 	LoginErrorMsg struct{ Err error }
+
+	LoginSetOwnUsername struct {
+		Username string
+		UserID   string
+	}
 )

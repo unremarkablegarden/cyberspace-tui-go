@@ -52,6 +52,16 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = updatedModel
 		return mm, command
 
+	case messages.LoginSetOwnUsername:
+		mm.Config.Auth.Username = msg.Username
+		mm.Config.Auth.UserID = msg.UserID
+
+		if saveErr := mm.SaveAuthInfo(); saveErr != nil {
+			panic(fmt.Sprintf("Error saving auth info: %s", saveErr.Error()))
+		}
+
+		return mm, nil
+
 		// Switch models stuff
 	case messages.SwitchToFeed:
 		feedModel := models.NewFeedModel(mm.CyberClient)
@@ -82,7 +92,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = topicFeedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToProfile:
-		profileModel := models.NewProfileModel(mm.CyberClient, msg.Username, "")
+		profileModel := models.NewProfileModel(mm.CyberClient, msg.Username, mm.Config.Auth.Username)
 		mm.ActiveModel = profileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToCompose:
@@ -631,66 +641,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 /****** DONE ******/
 func (m Model) View() string {
-	var v string
-	if m.showThemeSwitcher {
-		v = m.themeSwitcherModel.View()
-	} else {
-		switch m.state {
-		case StateLogin:
-			v = m.loginModel.View()
-		case StateFeed:
-			v = m.feedModel.View()
-		case StatePostDetail:
-			v = m.postDetailModel.View()
-		case StateCompose:
-			v = m.composeModel.View()
-		case StateBookmarks:
-			v = m.bookmarksModel.View()
-		case StateNotifications:
-			v = m.notificationsModel.View()
-		case StateProfile:
-			v = m.profileModel.View()
-		case StateTopics:
-			v = m.topicsModel.View()
-		case StateTopicFeed:
-			v = m.topicFeedModel.View()
-		case StateEditProfile:
-			v = m.editProfileModel.View()
-		case StateNotes:
-			v = m.notesModel.View()
-		case StateNoteCompose:
-			v = m.noteComposeModel.View()
-		}
-	}
-	return zone.Scan(v)
+	return zone.Scan("hola")
 }
-
-// openProfile transitions to the profile screen, saving the current state to return to
-/*
-func (m *Model) openProfile(username string) tea.Cmd {
-	m.returnState = m.state
-	m.state = StateProfile
-	currentUsername := ""
-	if m.config != nil {
-		currentUsername = m.config.Username
-	}
-	m.profileModel = models.NewProfileModel(m.baseURL, m.config.IDToken, username, currentUsername)
-	m.profileModel.SetSize(m.width, m.height)
-	return m.profileModel.Init()
-}
-
-// fetchOwnUsernameCmd fetches the current user's username after login
-func fetchOwnUsernameCmd(baseURL, idToken string) tea.Cmd {
-	return func() tea.Msg {
-		client := api.NewClient(baseURL, idToken)
-		user, err := client.FetchOwnProfile()
-		if err != nil {
-			return nil
-		}
-		return ownUsernameMsg{username: user.Username}
-	}
-}
-*/
 
 func main() {
 	// Load .env file (optional - won't fail if missing)

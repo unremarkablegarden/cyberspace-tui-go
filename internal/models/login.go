@@ -106,7 +106,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.LoginSuccessMsg:
 		m.loading = false
-		return m, m.loginSuccess
+		return m, tea.Batch(m.fetchOwnUsername, m.moveToFeed)
 
 	case messages.LoginErrorMsg:
 		m.loading = false
@@ -249,7 +249,16 @@ func (m *LoginModel) SetSize(width, height int) {
 	m.height = height
 }
 
-func (m *LoginModel) loginSuccess() tea.Msg {
+func (m *LoginModel) fetchOwnUsername() tea.Msg {
+	user, userErr := m.client.FetchOwnProfile()
+	if userErr != nil {
+		return nil
+	}
+
+	return messages.LoginSetOwnUsername{Username: user.Username, UserID: user.ID}
+}
+
+func (m *LoginModel) moveToFeed() tea.Msg {
 	return messages.SwitchToFeed{}
 }
 
