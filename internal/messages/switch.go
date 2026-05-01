@@ -9,9 +9,14 @@ type (
 	SwitchToTopics        struct{}
 	SwitchToCompose       struct{}
 	SwitchToThemeSwitcher struct{}
+	SwitchToNotes         struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
 	SwitchToEditProfile   struct{ User entities.User }
-	SwitchToProfile       struct {
+	SwitchToNoteCompose   struct {
+		Note   entities.Note
+		IsEdit bool
+	}
+	SwitchToProfile struct {
 		Username    string
 		BackMessage PrevMessage
 	}

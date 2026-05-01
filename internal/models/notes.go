@@ -15,35 +15,9 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// OpenNotesMsg is sent to navigate to the notes screen
-type OpenNotesMsg struct{}
-
-// BackFromNotesMsg is sent when leaving the notes screen
-type BackFromNotesMsg struct{}
-
-// OpenNoteComposeMsg is sent to open the note compose/edit screen
-type OpenNoteComposeMsg struct {
-	Note   entities.Note
-	IsEdit bool
-}
-
-type notesLoadedMsg struct {
-	Notes  []entities.Note
-	Cursor string
-}
-
-type moreNotesLoadedMsg struct {
-	Notes  []entities.Note
-	Cursor string
-}
-
-type notesErrorMsg struct{ Err error }
-
-type noteDeletedMsg struct{ NoteID string }
-type noteDeleteErrMsg struct{ Err error }
 
 // NoteItem implements list.Item for notes
 type NoteItem struct{ Note entities.Note }
@@ -170,17 +144,17 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg { return BackFromNotesMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Refresh):
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
 		case key.Matches(msg, m.keys.New):
-			return m, func() tea.Msg { return OpenNoteComposeMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
 		case key.Matches(msg, m.keys.Edit):
 			if ni, ok := m.list.SelectedItem().(NoteItem); ok {
 				note := ni.Note
-				return m, func() tea.Msg { return OpenNoteComposeMsg{Note: note, IsEdit: true} }
+				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
 			}
 		case key.Matches(msg, m.keys.Delete):
 			if ni, ok := m.list.SelectedItem().(NoteItem); ok {
@@ -192,7 +166,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch it := m.list.SelectedItem().(type) {
 			case NoteItem:
 				note := it.Note
-				return m, func() tea.Msg { return OpenNoteComposeMsg{Note: note, IsEdit: true} }
+				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: false} }
 			case LoadMoreItem:
 				if !m.loadingMore {
 					m.loadingMore = true
@@ -219,50 +193,45 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case notesLoadedMsg:
+	case messages.NotesLoadedMsg:
 		m.loading = false
 		m.deleting = false
+		m.nextCursor = msg.Cursor
+		m.hasMore = msg.Cursor != ""
 		m.err = nil
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
-		items := notesToItems(msg.Notes)
-		if m.hasMore {
-			items = append(items, LoadMoreItem{})
-		}
-		cmd := m.list.SetItems(items)
-		return m, cmd
-
-	case moreNotesLoadedMsg:
-		m.loadingMore = false
-		m.nextCursor = msg.Cursor
-		m.hasMore = msg.Cursor != ""
 		var items []list.Item
-		for _, existing := range m.list.Items() {
-			if _, ok := existing.(LoadMoreItem); ok {
-				continue
+		if msg.IsAdditional {
+
+			for _, existing := range m.list.Items() {
+				if _, ok := existing.(LoadMoreItem); ok {
+					continue
+				}
+				items = append(items, existing)
 			}
-			items = append(items, existing)
+			for _, n := range msg.Notes {
+				items = append(items, NoteItem{Note: n})
+			}
+		} else {
+			items = notesToItems(msg.Notes)
 		}
-		for _, n := range msg.Notes {
-			items = append(items, NoteItem{Note: n})
-		}
+
 		if m.hasMore {
 			items = append(items, LoadMoreItem{})
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 
-	case notesErrorMsg:
+	case messages.NotesLoadedErrMsg:
 		m.loading = false
 		m.loadingMore = false
 		m.deleting = false
 		m.err = msg.Err
 
-	case noteDeletedMsg:
+	case messages.NoteDeleteMsg:
 		m.loading = true
 		return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
 
-	case noteDeleteErrMsg:
+	case messages.NoteDeleteErrMsg:
 		m.deleting = false
 		m.err = msg.Err
 
@@ -354,9 +323,9 @@ func (m NotesModel) fetchNotes() tea.Cmd {
 	return func() tea.Msg {
 		notes, cursor, err := m.client.FetchNotes(20)
 		if err != nil {
-			return notesErrorMsg{Err: err}
+			return messages.NotesLoadedErrMsg{Err: err}
 		}
-		return notesLoadedMsg{Notes: notes, Cursor: cursor}
+		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor}
 	}
 }
 
@@ -364,18 +333,18 @@ func (m NotesModel) fetchMoreNotes() tea.Cmd {
 	return func() tea.Msg {
 		notes, cursor, err := m.client.FetchMoreNotes(20, m.nextCursor)
 		if err != nil {
-			return notesErrorMsg{Err: err}
+			return messages.NotesLoadedErrMsg{Err: err}
 		}
-		return moreNotesLoadedMsg{Notes: notes, Cursor: cursor}
+		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor, IsAdditional: true}
 	}
 }
 
 func (m NotesModel) deleteNote(noteID string) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.DeleteNote(noteID); err != nil {
-			return noteDeleteErrMsg{Err: err}
+			return messages.NoteDeleteErrMsg{Err: err}
 		}
-		return noteDeletedMsg{NoteID: noteID}
+		return messages.NoteDeleteMsg{NoteID: noteID}
 	}
 }
 

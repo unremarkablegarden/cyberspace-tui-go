@@ -10,6 +10,7 @@ Stuff found while working on the code
 - [X] When open notifications panel, post id is always empty
 - [X] Same error as empty post id in bookmarks
 - [X] When theme changes, no file is being save to persist changes
+- [X] Edit profile missing
 
 ## Stuff to fix
 - [ ] With current changes, each screen change triggers a new request (local cache?)
@@ -17,10 +18,10 @@ Stuff found while working on the code
 - [ ] Some list paginated events uses similar logic, maybe a generic function can help with that
 - [ ] Update help keys
 
-- [ ] Edit profile missing
 - [ ] Notes missing
 - [ ] Move *_items to be more clear
 
 ## Stuff to do
+- [ ] Menu for easy navigation
 - [ ] Support images in terminals that support _TGP_
 - [ ] Expand button in feed screen

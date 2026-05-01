@@ -118,6 +118,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		editProfileModel := models.NewEditProfileModel(mm.CyberClient, msg.User)
 		mm.ActiveModel = editProfileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToNotes:
+		notesModel := models.NewNotesModel(mm.CyberClient)
+		mm.ActiveModel = notesModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel()
 		mm.ActiveModel = themeSwitcherModel

@@ -114,7 +114,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Topics):
 			return m, func() tea.Msg { return messages.SwitchToTopics{} }
 		case key.Matches(msg, m.keys.Notes):
-			return m, func() tea.Msg { return OpenNotesMsg{} }
+			return m, func() tea.Msg { return messages.SwitchToNotes{} }
 		case key.Matches(msg, m.keys.Profile):
 			if item, ok := m.list.SelectedItem().(PostItem); ok {
 				username := item.Post.AuthorUsername
