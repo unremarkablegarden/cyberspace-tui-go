@@ -168,6 +168,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.FeedLoadedMsg:
 		m.loading = false
+		m.loadingMore = false
 		m.err = nil
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""

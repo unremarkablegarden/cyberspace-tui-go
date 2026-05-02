@@ -13,13 +13,13 @@ Stuff found while working on the code
 - [X] Logout functionality not implemented
 - [X] Some list paginated events uses similar logic, maybe a generic function can help with that
 - [X] Move *_items to be more clear
+- [X] Only first pagination is working
 
 ## Stuff to fix
 - [ ] With current changes, each screen change triggers a new request (local cache?)
 - [ ] When a post is saved in the post detail view, there is no "unsave" functionality
 - [ ] Update help keys
 - [ ] Note composer "IsEdit" flag works only to edit a note, if "IsEdit" is false, falls back to "new note" instead of open a note in read mode or something
-- [ ] Only first pagination is working
 
 
 ## Stuff to do

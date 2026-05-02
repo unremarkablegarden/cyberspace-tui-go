@@ -176,6 +176,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.ProfileLoadedMsg:
 		m.loading = false
+		m.loadingMore = false
 		m.nextCursor = msg.Cursor
 		m.err = nil
 		m.hasMore = msg.Cursor != ""

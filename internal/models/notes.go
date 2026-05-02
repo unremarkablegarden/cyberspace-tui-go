@@ -147,6 +147,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.NotesLoadedMsg:
 		m.loading = false
+		m.loadingMore = false
 		m.deleting = false
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""

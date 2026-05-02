@@ -126,6 +126,7 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.NotificationsLoadedMsg:
 		m.loading = false
+		m.loadingMore = false
 		m.nextCursor = msg.Cursor
 		m.hasMore = msg.Cursor != ""
 		m.err = nil
