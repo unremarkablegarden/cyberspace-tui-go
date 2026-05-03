@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
@@ -48,7 +47,7 @@ func (d PostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	switch it := item.(type) {
 	case PostItem:
-		card := renderPostCard(it.Post, selected, width)
+		card := renderPostCard(&it.Post, nil, selected, width)
 		fmt.Fprint(w, zone.Mark(it.Post.ID, card))
 	case LoadMoreItem:
 		card := renderLoadMoreCard(selected, width)
@@ -60,7 +59,7 @@ func (d PostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 // CARD RENDERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func renderPostCard(p entities.Post, selected bool, width int) string {
+func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width int) string {
 	innerWidth := width - 4
 	if innerWidth < 20 {
 		innerWidth = 76
@@ -68,41 +67,15 @@ func renderPostCard(p entities.Post, selected bool, width int) string {
 
 	// Username on left, time + stats on right
 	username := "@" + p.AuthorUsername
-
-	replyWord := "replies"
-	if p.RepliesCount == 1 {
-		replyWord = "reply"
-	}
-	saveWord := "saves"
-	if p.BookmarksCount == 1 {
-		saveWord = "save"
-	}
-	rightStats := fmt.Sprintf("%d %s · %d %s · %s",
-		p.RepliesCount, replyWord,
-		p.BookmarksCount, saveWord,
-		TimeAgo(p.CreatedAt))
-
-	usernameWidth := len(username)
-	statsWidth := len(rightStats)
-	headerSpacing := innerWidth - usernameWidth - statsWidth
-	if headerSpacing < 1 {
-		headerSpacing = 1
-	}
-
+	rightStats := getPostStatsString(p, b)
+	usernameWidth, statsWidth := len(username), len(rightStats)
+	headerSpacing := max(innerWidth-usernameWidth-statsWidth, 1)
 	headerLine := styles.Username.Render(username) +
 		strings.Repeat(" ", headerSpacing) +
 		styles.Dim.Render(rightStats)
 
 	content := Truncate(StripMarkdown(p.Content), innerWidth*2-3)
-
-	var tagsLine string
-	if len(p.Topics) > 0 {
-		tags := make([]string, len(p.Topics))
-		for i, t := range p.Topics {
-			tags[i] = "[" + t + "]"
-		}
-		tagsLine = styles.Dim.Render(strings.Join(tags, " "))
-	}
+	tagsLine := getTagLineString(p.Topics)
 
 	var boxContent strings.Builder
 	boxContent.WriteString(headerLine)
@@ -116,19 +89,46 @@ func renderPostCard(p entities.Post, selected bool, width int) string {
 	return BuildCardBox(boxContent.String(), innerWidth, selected)
 }
 
-func renderLoadMoreCard(selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
+func getPostStatsString(post *entities.Post, bookmark *entities.Bookmark) string {
+	replyWord := "replies"
+	if post.RepliesCount == 1 {
+		replyWord = "reply"
 	}
 
-	content := "▼ LOAD MORE POSTS ▼"
-	contentWidth := lipgloss.Width(content)
-	padding := (innerWidth - contentWidth) / 2
-	if padding < 0 {
-		padding = 0
+	if bookmark != nil {
+		return fmt.Sprintf("%d %s · %s · saved %s",
+			post.RepliesCount, replyWord,
+			TimeAgo(post.CreatedAt),
+			TimeAgo(bookmark.CreatedAt))
 	}
-	centeredContent := strings.Repeat(" ", padding) + content
 
-	return BuildCardBox(centeredContent, innerWidth, selected)
+	saveWord := "saves"
+	if post.BookmarksCount == 1 {
+		saveWord = "save"
+	}
+	return fmt.Sprintf("%d %s · %d %s · %s",
+		post.RepliesCount, replyWord,
+		post.BookmarksCount, saveWord,
+		TimeAgo(post.CreatedAt))
+
+}
+
+func getTagLineString(topics []string) string {
+	if len(topics) > 0 {
+		tags := make([]string, len(topics))
+		for i, t := range topics {
+			tags[i] = "[" + t + "]"
+		}
+		return styles.Dim.Render(strings.Join(tags, " "))
+	}
+
+	return ""
+}
+
+func PostsToItems(posts []entities.Post) []list.Item {
+	items := make([]list.Item, len(posts))
+	for i, p := range posts {
+		items[i] = PostItem{Post: p}
+	}
+	return items
 }

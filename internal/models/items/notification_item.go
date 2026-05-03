@@ -66,23 +66,17 @@ func renderNotificationCard(n entities.Notification, selected bool, width int) s
 
 	summaryWidth := lipgloss.Width(unreadMark) + lipgloss.Width(summary)
 	timeWidth := len(timeStr)
-	spacing := innerWidth - summaryWidth - timeWidth
-	if spacing < 1 {
-		spacing = 1
-	}
-
-	line1 := unreadMark + styles.Normal.Render(summary) + strings.Repeat(" ", spacing) + styles.Dim.Render(timeStr)
-
-	var line2 string
-	if n.Metadata.ReplyID != "" {
-		line2 = styles.Dim.Render("  → open post  [enter]")
-	}
+	spacing := max(innerWidth-summaryWidth-timeWidth, 1)
 
 	var boxContent strings.Builder
-	boxContent.WriteString(line1)
-	if line2 != "" {
+	boxContent.WriteString(unreadMark +
+		styles.Normal.Render(summary) +
+		strings.Repeat(" ", spacing) +
+		styles.Dim.Render(timeStr))
+
+	if n.Metadata.ReplyID != "" {
 		boxContent.WriteString("\n")
-		boxContent.WriteString(line2)
+		boxContent.WriteString(styles.Dim.Render("  → open post  [enter]"))
 	}
 
 	return BuildCardBox(boxContent.String(), innerWidth, selected)
@@ -105,4 +99,12 @@ func notificationSummary(n entities.Notification) string {
 		}
 		return n.Type
 	}
+}
+
+func NotificationsToItems(notifs []entities.Notification) []list.Item {
+	items := make([]list.Item, len(notifs))
+	for i, n := range notifs {
+		items[i] = NotificationItem{Notification: n}
+	}
+	return items
 }

@@ -10,7 +10,6 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
-	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 // BookmarkItem wraps a Bookmark for the list bubble
@@ -42,7 +41,7 @@ func (d BookmarkDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	switch it := item.(type) {
 	case BookmarkItem:
-		card := renderBookmarkCard(it.Bookmark, selected, width)
+		card := renderPostCard(&it.Bookmark.Post, &it.Bookmark, selected, width)
 		fmt.Fprint(w, zone.Mark(it.Bookmark.Post.ID, card))
 	case LoadMoreItem:
 		card := renderLoadMoreCard(selected, width)
@@ -50,54 +49,12 @@ func (d BookmarkDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 }
 
-func renderBookmarkCard(b entities.Bookmark, selected bool, width int) string {
-	p := b.Post
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
-
-	username := "@" + p.AuthorUsername
-
-	replyWord := "replies"
-	if p.RepliesCount == 1 {
-		replyWord = "reply"
-	}
-	rightStats := fmt.Sprintf("%d %s · %s · saved %s",
-		p.RepliesCount, replyWord,
-		TimeAgo(p.CreatedAt),
-		TimeAgo(b.CreatedAt))
-
-	usernameWidth := len(username)
-	statsWidth := len(rightStats)
-	headerSpacing := innerWidth - usernameWidth - statsWidth
-	if headerSpacing < 1 {
-		headerSpacing = 1
-	}
-
-	headerLine := styles.Username.Render(username) +
-		strings.Repeat(" ", headerSpacing) +
-		styles.Dim.Render(rightStats)
-
-	content := Truncate(StripMarkdown(p.Content), innerWidth*2-3)
-
-	var tagsLine string
-	if len(p.Topics) > 0 {
-		tags := make([]string, len(p.Topics))
-		for i, t := range p.Topics {
-			tags[i] = "[" + t + "]"
+func BookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
+	items := make([]list.Item, 0, len(bookmarks))
+	for _, b := range bookmarks {
+		if !b.Post.Deleted {
+			items = append(items, BookmarkItem{Bookmark: b})
 		}
-		tagsLine = styles.Dim.Render(strings.Join(tags, " "))
 	}
-
-	var boxContent strings.Builder
-	boxContent.WriteString(headerLine)
-	boxContent.WriteString("\n")
-	boxContent.WriteString(content)
-	if tagsLine != "" {
-		boxContent.WriteString("\n")
-		boxContent.WriteString(tagsLine)
-	}
-
-	return BuildCardBox(boxContent.String(), innerWidth, selected)
+	return items
 }

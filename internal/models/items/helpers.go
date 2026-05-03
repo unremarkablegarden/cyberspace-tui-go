@@ -12,8 +12,29 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
+)
+
+const (
+	DefaultSafeWidth       = 80
+	DefaultSafeHeight      = 24
+	DefaultMinWidth        = 10
+	DefaultMinHeight       = 10
+	DefaultMaxCardBoxLines = 4
+)
+
+var (
+	reLink        = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	reBold        = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	reBoldUndsc   = regexp.MustCompile(`__(.+?)__`)
+	reItalic      = regexp.MustCompile(`\*(.+?)\*`)
+	reItalUndsc   = regexp.MustCompile(`\b_(.+?)_\b`)
+	reCode        = regexp.MustCompile("`([^`]+)`")
+	reHeading     = regexp.MustCompile(`(?m)^#{1,6}\s+`)
+	reCodeBlock   = regexp.MustCompile("(?s)```[a-z]*\n?(.*?)```")
+	reNbspLine    = regexp.MustCompile(`(?m)^[ \t]*&nbsp;[ \t]*$`)
+	reNbspUniLine = regexp.MustCompile("(?m)^[ \t]*\u00A0[ \t]*$")
+	reMultiBlank  = regexp.MustCompile(`\n{3,}`)
 )
 
 // TimeAgo formats a time as a relative string (e.g., "5m", "2h", "3d")
@@ -87,20 +108,6 @@ func WrapText(text string, width int) []string {
 	return lines
 }
 
-var (
-	reLink        = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
-	reBold        = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	reBoldUndsc   = regexp.MustCompile(`__(.+?)__`)
-	reItalic      = regexp.MustCompile(`\*(.+?)\*`)
-	reItalUndsc   = regexp.MustCompile(`\b_(.+?)_\b`)
-	reCode        = regexp.MustCompile("`([^`]+)`")
-	reHeading     = regexp.MustCompile(`(?m)^#{1,6}\s+`)
-	reCodeBlock   = regexp.MustCompile("(?s)```[a-z]*\n?(.*?)```")
-	reNbspLine    = regexp.MustCompile(`(?m)^[ \t]*&nbsp;[ \t]*$`)
-	reNbspUniLine = regexp.MustCompile("(?m)^[ \t]*\u00A0[ \t]*$")
-	reMultiBlank  = regexp.MustCompile(`\n{3,}`)
-)
-
 // cleanContent removes &nbsp;-only lines and collapses excessive blank lines,
 // matching the Nuxt4 web app's useMarkdownRenderer sanitization.
 func cleanContent(s string) string {
@@ -148,12 +155,13 @@ func StripMarkdownKeepNewlines(s string) string {
 // SafeDimensions returns width and height with sensible defaults
 // Use this before WindowSizeMsg has been received
 func SafeDimensions(width, height int) (int, int) {
-	if width < 10 {
-		width = 80
+	if width < DefaultMinWidth {
+		width = DefaultSafeWidth
 	}
-	if height < 10 {
-		height = 24
+	if height < DefaultMinHeight {
+		height = DefaultSafeHeight
 	}
+
 	return width, height
 }
 
@@ -168,17 +176,12 @@ func RenderHeader(title string, width int) string {
 	titleRendered := styles.Title.Render(title)
 	titleWidth := lipgloss.Width(titleRendered)
 
-	barWidth := (width - titleWidth) / 2
-	if barWidth < 0 {
-		barWidth = 0
-	}
-	rightBarWidth := width - titleWidth - barWidth
-	if rightBarWidth < 0 {
-		rightBarWidth = 0
-	}
-
 	barStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
+
+	barWidth := max((width-titleWidth)/2, 0)
 	leftBar := barStyle.Render(strings.Repeat("█", barWidth))
+
+	rightBarWidth := max(width-titleWidth-barWidth, 0)
 	rightBar := barStyle.Render(strings.Repeat("█", rightBarWidth))
 
 	return leftBar + titleRendered + rightBar + "\n"
@@ -280,23 +283,19 @@ func BuildCardBox(content string, width int, selected bool) string {
 	lines := strings.Split(content, "\n")
 	var middle strings.Builder
 	totalLines := 0
-	maxLines := 4
 
 	for _, line := range lines {
-		if totalLines >= maxLines {
+		if totalLines >= DefaultMaxCardBoxLines {
 			break
 		}
 		wrappedLines := WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
-			if totalLines >= maxLines {
+			if totalLines >= DefaultMaxCardBoxLines {
 				break
 			}
 			styled := contentStyle.Render(wl)
 			lineWidth := lipgloss.Width(styled)
-			pad := innerWidth - lineWidth
-			if pad < 0 {
-				pad = 0
-			}
+			pad := max(innerWidth-lineWidth, 0)
 			middle.WriteString(borderStyle.Render("│"))
 			middle.WriteString(" ")
 			middle.WriteString(styled)
@@ -340,39 +339,5 @@ func BuildListItems(
 		items = append(items, LoadMoreItem{})
 	}
 
-	return items
-}
-
-func BookmarksToItems(bookmarks []entities.Bookmark) []list.Item {
-	items := make([]list.Item, 0, len(bookmarks))
-	for _, b := range bookmarks {
-		if !b.Post.Deleted {
-			items = append(items, BookmarkItem{Bookmark: b})
-		}
-	}
-	return items
-}
-
-func PostsToItems(posts []entities.Post) []list.Item {
-	items := make([]list.Item, len(posts))
-	for i, p := range posts {
-		items[i] = PostItem{Post: p}
-	}
-	return items
-}
-
-func NotesToItems(notes []entities.Note) []list.Item {
-	items := make([]list.Item, len(notes))
-	for i, n := range notes {
-		items[i] = NoteItem{Note: n}
-	}
-	return items
-}
-
-func NotificationsToItems(notifs []entities.Notification) []list.Item {
-	items := make([]list.Item, len(notifs))
-	for i, n := range notifs {
-		items[i] = NotificationItem{Notification: n}
-	}
 	return items
 }
