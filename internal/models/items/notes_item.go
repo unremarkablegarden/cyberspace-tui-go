@@ -23,7 +23,7 @@ func (n NoteItem) Description() string { return TimeAgo(n.Note.CreatedAt) }
 // NoteDelegate renders note items in the list
 type NoteDelegate struct{}
 
-func (d NoteDelegate) Height() int                               { return 3 }
+func (d NoteDelegate) Height() int                               { return 6 }
 func (d NoteDelegate) Spacing() int                              { return 0 }
 func (d NoteDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 func (d NoteDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -50,7 +50,7 @@ func renderNoteCard(n entities.Note, selected bool, width int) string {
 	}
 
 	meta := TimeAgo(n.CreatedAt) +
-		" · " +
+		"·" +
 		getTagLineString(n.Topics)
 
 	var contentLine, metaLine string

@@ -20,7 +20,7 @@ const (
 	DefaultSafeHeight      = 24
 	DefaultMinWidth        = 10
 	DefaultMinHeight       = 10
-	DefaultMaxCardBoxLines = 4
+	DefaultMaxCardBoxLines = 5
 )
 
 var (
@@ -59,9 +59,10 @@ func TimeAgo(t time.Time) string {
 }
 
 // Truncate shortens a string to max visual width with ellipsis
-func Truncate(s string, max int) string {
+// returns a boolean to indicate if was truncated or not
+func Truncate(s string, max int) (string, bool) {
 	if lipgloss.Width(s) <= max {
-		return s
+		return s, false
 	}
 	if max <= 3 {
 		max = 3
@@ -71,11 +72,11 @@ func Truncate(s string, max int) string {
 	for i, r := range s {
 		w := runewidth.RuneWidth(r)
 		if width+w > target {
-			return s[:i] + "..."
+			return s[:i] + "...", true
 		}
 		width += w
 	}
-	return s + "..."
+	return s + "...", true
 }
 
 // WrapText wraps text to fit within a visual width, splitting on word boundaries.

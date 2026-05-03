@@ -24,7 +24,8 @@ func (b BookmarkItem) FilterValue() string {
 
 func (b BookmarkItem) Title() string { return "@" + b.Bookmark.Post.AuthorUsername }
 func (b BookmarkItem) Description() string {
-	return Truncate(StripMarkdown(b.Bookmark.Post.Content), 80)
+	desc, _ := Truncate(StripMarkdown(b.Bookmark.Post.Content), 80)
+	return desc
 }
 
 // BookmarkDelegate renders bookmark items as styled cards

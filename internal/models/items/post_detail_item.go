@@ -26,8 +26,11 @@ func (p PostItem) FilterValue() string {
 	return p.Post.AuthorUsername + " " + p.Post.Content + " " + strings.Join(p.Post.Topics, " ")
 }
 
-func (p PostItem) Title() string       { return "@" + p.Post.AuthorUsername }
-func (p PostItem) Description() string { return Truncate(StripMarkdown(p.Post.Content), 80) }
+func (p PostItem) Title() string { return "@" + p.Post.AuthorUsername }
+func (p PostItem) Description() string {
+	desc, _ := Truncate(StripMarkdown(p.Post.Content), 80)
+	return desc
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST DELEGATE — custom rendering for list items
@@ -36,7 +39,7 @@ func (p PostItem) Description() string { return Truncate(StripMarkdown(p.Post.Co
 // PostDelegate renders post items as styled cards.
 type PostDelegate struct{}
 
-func (d PostDelegate) Height() int  { return 6 }
+func (d PostDelegate) Height() int  { return 7 }
 func (d PostDelegate) Spacing() int { return 0 }
 
 func (d PostDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
@@ -74,8 +77,13 @@ func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width
 		strings.Repeat(" ", headerSpacing) +
 		styles.Dim.Render(rightStats)
 
-	content := Truncate(StripMarkdown(p.Content), innerWidth*2-3)
-	tagsLine := getTagLineString(p.Topics)
+	content, isTruncated := Truncate(StripMarkdown(p.Content), innerWidth*2-3)
+	var tagsLine string
+	if isTruncated {
+		tagsLine += styles.Bright.Render("[load more] · ")
+	}
+
+	tagsLine += getTagLineString(p.Topics)
 
 	var boxContent strings.Builder
 	boxContent.WriteString(headerLine)
