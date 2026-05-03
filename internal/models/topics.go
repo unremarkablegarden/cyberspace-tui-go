@@ -1,8 +1,6 @@
 package models
 
 import (
-	"fmt"
-	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -12,57 +10,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
-
-// ─── Topic list item ────────────────────────────────────────────────────────
-type TopicItem struct{ Topic entities.Topic }
-
-func (t TopicItem) FilterValue() string { return t.Topic.Name }
-func (t TopicItem) Title() string       { return "[" + t.Topic.Name + "]" }
-func (t TopicItem) Description() string {
-	return fmt.Sprintf("%d posts", t.Topic.PostCount)
-}
-
-type TopicDelegate struct{}
-
-func (d TopicDelegate) Height() int                             { return 3 }
-func (d TopicDelegate) Spacing() int                            { return 0 }
-func (d TopicDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d TopicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	it, ok := item.(TopicItem)
-	if !ok {
-		return
-	}
-	selected := index == m.Index()
-	width := m.Width()
-	fmt.Fprint(w, renderTopicCard(it.Topic, selected, width))
-}
-
-func renderTopicCard(t entities.Topic, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
-
-	tag := "[" + t.Name + "]"
-	count := fmt.Sprintf("%d posts", t.PostCount)
-
-	spacing := innerWidth - len(tag) - len(count)
-	if spacing < 1 {
-		spacing = 1
-	}
-
-	line := styles.Bright.Render(tag) + strings.Repeat(" ", spacing) + styles.Dim.Render(count)
-	return items.BuildCardBox(line, innerWidth, selected)
-}
-
-// ─── TopicsModel ────────────────────────────────────────────────────────────
 
 type TopicsModel struct {
 	list    list.Model
@@ -77,7 +29,7 @@ type TopicsModel struct {
 }
 
 func NewTopicsModel(client *api.Client) TopicsModel {
-	delegate := TopicDelegate{}
+	delegate := items.TopicDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -123,7 +75,7 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Back):
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
 		case key.Matches(msg, m.keys.Open):
-			if it, ok := m.list.SelectedItem().(TopicItem); ok {
+			if it, ok := m.list.SelectedItem().(items.TopicItem); ok {
 				topic := it.Topic
 				return m, func() tea.Msg { return messages.SwitchToTopicFeed{Topic: topic} }
 			}
@@ -143,7 +95,7 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		localItems := make([]list.Item, len(msg.Topics))
 		for i, t := range msg.Topics {
-			localItems[i] = TopicItem{Topic: t}
+			localItems[i] = items.TopicItem{Topic: t}
 		}
 		cmd := m.list.SetItems(localItems)
 		return m, cmd
