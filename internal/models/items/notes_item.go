@@ -36,7 +36,6 @@ func (d NoteDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		fmt.Fprint(w, zone.Mark("load-more-notes", styles.Dim.Render("  ▼ load more")))
 	}
 }
-
 func renderNoteCard(n entities.Note, selected bool, width int) string {
 	innerWidth := width - 4
 	if innerWidth < 20 {

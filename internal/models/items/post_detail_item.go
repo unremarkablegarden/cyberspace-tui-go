@@ -84,7 +84,6 @@ func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width
 	}
 
 	tagsLine += getTagLineString(p.Topics)
-
 	var boxContent strings.Builder
 	boxContent.WriteString(headerLine)
 	boxContent.WriteString("\n")
