@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +13,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -29,12 +29,12 @@ type FeedModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        FeedKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewFeedModel creates a new feed screen
-func NewFeedModel(client *api.Client) FeedModel {
+func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds) FeedModel {
 	// Create list with custom delegate
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -64,7 +64,7 @@ func NewFeedModel(client *api.Client) FeedModel {
 		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
-		keys:    NewFeedKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
@@ -81,40 +81,27 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch {
-		// temporal access while menu is implemented
-		case msg.String() == "t":
-			return m, func() tea.Msg { return messages.SwitchToThemeSwitcher{} }
-		case msg.String() == "esc":
+		switch msg.String() {
+		case "esc":
 			// esc never quits — swallow it on the feed screen
 			return m, nil
-		case key.Matches(msg, m.keys.Quit):
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
-		case key.Matches(msg, m.keys.Logout):
+		case m.keys.FeedKeybinds.Logout:
 			return m, func() tea.Msg { return messages.LogoutMsg{} }
-		case key.Matches(msg, m.keys.NewPost):
-			return m, func() tea.Msg { return messages.SwitchToCompose{} }
-		case key.Matches(msg, m.keys.Bookmarks):
-			return m, func() tea.Msg { return messages.SwitchToBookmarks{} }
-		case key.Matches(msg, m.keys.Notifications):
-			return m, func() tea.Msg { return messages.SwitchToNotifications{} }
-		case key.Matches(msg, m.keys.Topics):
-			return m, func() tea.Msg { return messages.SwitchToTopics{} }
-		case key.Matches(msg, m.keys.Notes):
-			return m, func() tea.Msg { return messages.SwitchToNotes{} }
-		case key.Matches(msg, m.keys.Profile):
+		case m.keys.FeedKeybinds.Profile:
 			if item, ok := m.list.SelectedItem().(items.PostItem); ok {
 				username := item.Post.AuthorUsername
 				return m, func() tea.Msg { return messages.SwitchToProfile{Username: username} }
 			}
-		case key.Matches(msg, m.keys.Open):
+		case m.keys.GlobalKeybinds.Open:
 			if item := m.list.SelectedItem(); item != nil {
 				switch it := item.(type) {
 				case items.PostItem:
@@ -233,17 +220,13 @@ func (m FeedModel) renderHeader(width int) string {
 }
 
 func (m FeedModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
+	helpView := m.help.View(m.keys.FeedHelpKeys())
 	paginatorView := m.list.Paginator.View()
 
 	helpWidth := lipgloss.Width(helpView)
 	paginatorWidth := lipgloss.Width(paginatorView)
 
-	// help ────── paginator
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
+	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
 
 	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }

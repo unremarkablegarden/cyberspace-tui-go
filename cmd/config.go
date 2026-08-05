@@ -6,14 +6,17 @@ import (
 	"log"
 	"path/filepath"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 const DefaultThemeFilename = "theme.json"
+const DefaultKeybindsFilename = "keybinds.json"
 
 type appConfig struct {
 	Auth       appAuth
 	Theme      appTheme
+	Keybinds   keymaps.AppKeybinds
 	ConfigPath string
 }
 
@@ -55,19 +58,49 @@ func (mm *MainModel) loadTheme() {
 	}
 }
 
+func (mm *MainModel) loadKeybinds() {
+	keybindsData, keybindsDataErr := loadFile(filepath.Join(mm.Config.ConfigPath, DefaultKeybindsFilename))
+	if keybindsDataErr != nil {
+		panic(fmt.Sprintf("Error reading keybinds file: %s", keybindsDataErr.Error()))
+	}
+
+	var appK keymaps.AppKeybinds
+	if len(keybindsData) > 0 {
+		if err := json.Unmarshal(keybindsData, &appK); err != nil {
+			panic(fmt.Sprintf("Error unmarshalling theme json: %s", keybindsDataErr.Error()))
+		}
+
+		mm.Config.Keybinds = appK
+	} else {
+		mm.Config.Keybinds = keymaps.NewDefaultAppKeymaps()
+
+		mm.SaveKeybindsInfo()
+	}
+}
+
+func (mm *MainModel) SaveKeybindsInfo() error {
+	keybindsMarshal, keybindsMarshalErr := json.Marshal(mm.Config.Keybinds)
+	if keybindsMarshalErr != nil {
+		return keybindsMarshalErr
+	}
+
+	return saveFile(
+		keybindsMarshal,
+		mm.Config.ConfigPath,
+		DefaultKeybindsFilename,
+	)
+
+}
+
 func (mm *MainModel) SaveThemeInfo() error {
 	themeMarshal, themeMarshalErr := json.Marshal(mm.Config.Theme)
 	if themeMarshalErr != nil {
 		return themeMarshalErr
 	}
 
-	if saveThemeErr := saveFile(
+	return saveFile(
 		themeMarshal,
 		mm.Config.ConfigPath,
 		DefaultThemeFilename,
-	); saveThemeErr != nil {
-		return saveThemeErr
-	}
-
-	return nil
+	)
 }

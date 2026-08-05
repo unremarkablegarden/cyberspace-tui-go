@@ -13,10 +13,6 @@ type notesResponse struct {
 	Cursor *string         `json:"cursor"`
 }
 
-type noteResponse struct {
-	Data entities.Note `json:"data"`
-}
-
 type noteIDResponse struct {
 	Data struct {
 		NoteID string `json:"noteId"`

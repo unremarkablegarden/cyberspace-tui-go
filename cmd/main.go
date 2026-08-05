@@ -30,6 +30,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return mm, tea.Quit
+		case tea.KeyCtrlK:
+			menuModel := models.NewMenuModel(mm.Config.Keybinds)
+			mm.ActiveModel = menuModel
+			return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 		default:
 			updatedModel, command := mm.ActiveModel.Update(msg)
 			mm.ActiveModel = updatedModel
@@ -81,6 +85,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SwitchToPostDetail:
 		postDetailModel := models.NewPostDetailModel(
 			mm.CyberClient,
+			mm.Config.Keybinds,
 			msg.Post,
 			"",
 			msg.BackMessage,
@@ -90,30 +95,41 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SwitchToProfile:
 		profileModel := models.NewProfileModel(
 			mm.CyberClient,
+			mm.Config.Keybinds,
 			msg.Username,
 			mm.Config.Auth.Username,
 			msg.BackMessage,
 		)
 		mm.ActiveModel = profileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToOwnProfile:
+		profileModel := models.NewProfileModel(
+			mm.CyberClient,
+			mm.Config.Keybinds,
+			mm.Config.Auth.Username,
+			mm.Config.Auth.Username,
+			nil,
+		)
+		mm.ActiveModel = profileModel
+		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToFeed:
-		feedModel := models.NewFeedModel(mm.CyberClient)
+		feedModel := models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds)
 		mm.ActiveModel = feedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
-		notificationsModel := models.NewNotificationsModel(mm.CyberClient)
+		notificationsModel := models.NewNotificationsModel(mm.CyberClient, mm.Config.Keybinds)
 		mm.ActiveModel = notificationsModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToBookmarks:
-		bookmarksModel := models.NewBookmarksModel(mm.CyberClient)
+		bookmarksModel := models.NewBookmarksModel(mm.CyberClient, mm.Config.Keybinds)
 		mm.ActiveModel = bookmarksModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopics:
-		topicsModel := models.NewTopicsModel(mm.CyberClient)
+		topicsModel := models.NewTopicsModel(mm.CyberClient, mm.Config.Keybinds)
 		mm.ActiveModel = topicsModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopicFeed:
-		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, msg.Topic)
+		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, mm.Config.Keybinds, msg.Topic)
 		mm.ActiveModel = topicFeedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToCompose:
@@ -125,15 +141,15 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = editProfileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotes:
-		notesModel := models.NewNotesModel(mm.CyberClient)
+		notesModel := models.NewNotesModel(mm.CyberClient, mm.Config.Keybinds)
 		mm.ActiveModel = notesModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNoteCompose:
-		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, msg.Note, msg.IsEdit)
+		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, msg.Note, msg.IsEdit)
 		mm.ActiveModel = noteComposeModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
-		themeSwitcherModel := models.NewThemeSwitcherModel()
+		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)
 		mm.ActiveModel = themeSwitcherModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 
@@ -158,15 +174,18 @@ func NewMainModel() *MainModel {
 	// 2. Load Theme
 	mm.loadTheme()
 
-	// 2. Load dependencies (client)
+	// 3. Load Keybinds
+	mm.loadKeybinds()
+
+	// 4. Load dependencies (client)
 	mm.loadDependencies()
 
-	// 3. Load Auth
+	// 5. Load Auth
 	mm.loadAuth()
 
-	// 4. Init whatever (login/feed)
+	// 6. Init whatever (login/feed)
 	if mm.Config.Auth.IDToken != "" && !mm.Config.Auth.IsExpired() {
-		mm.ActiveModel = models.NewFeedModel(mm.CyberClient)
+		mm.ActiveModel = models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds)
 	} else {
 		mm.ActiveModel = models.NewLoginModel(mm.CyberClient)
 	}

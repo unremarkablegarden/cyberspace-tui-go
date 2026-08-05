@@ -10,6 +10,7 @@ type (
 	SwitchToCompose       struct{}
 	SwitchToThemeSwitcher struct{}
 	SwitchToNotes         struct{}
+	SwitchToOwnProfile    struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
 	SwitchToEditProfile   struct{ User entities.User }
 	SwitchToNoteCompose   struct {

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +13,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -29,12 +29,12 @@ type BookmarksModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        BookmarksKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewBookmarksModel creates a new bookmarks screen
-func NewBookmarksModel(client *api.Client) BookmarksModel {
+func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds) BookmarksModel {
 	delegate := items.BookmarkDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -58,7 +58,7 @@ func NewBookmarksModel(client *api.Client) BookmarksModel {
 		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
-		keys:    NewBookmarksKeyMap(),
+		keys:    keybinds,
 		help:    h,
 	}
 }
@@ -73,23 +73,19 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks())
-		case key.Matches(msg, m.keys.Remove):
-			if item, ok := m.list.SelectedItem().(items.BookmarkItem); ok && item.Bookmark.ID != "" {
-				return m, m.deleteBookmark(item.Bookmark.ID)
-			}
-		case key.Matches(msg, m.keys.Open):
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.BookmarkItem:
 				post := it.Bookmark.Post
@@ -104,6 +100,10 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreBookmarks())
 				}
+			}
+		case m.keys.BookmarksKeybinds.Remove:
+			if item, ok := m.list.SelectedItem().(items.BookmarkItem); ok && item.Bookmark.ID != "" {
+				return m, m.deleteBookmark(item.Bookmark.ID)
 			}
 		}
 
@@ -215,16 +215,13 @@ func (m BookmarksModel) renderHeader(width int) string {
 }
 
 func (m BookmarksModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
+	helpView := m.help.View(m.keys.BookmarksHelpKeys())
 	paginatorView := m.list.Paginator.View()
 
 	helpWidth := lipgloss.Width(helpView)
 	paginatorWidth := lipgloss.Width(paginatorView)
 
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
+	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
 
 	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }

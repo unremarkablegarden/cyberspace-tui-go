@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,6 +12,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -28,12 +28,12 @@ type NotificationsModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        NotificationsKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewNotificationsModel creates a new notifications screen
-func NewNotificationsModel(client *api.Client) NotificationsModel {
+func NewNotificationsModel(client *api.Client, keymap keymaps.AppKeybinds) NotificationsModel {
 	delegate := items.NotificationDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -57,7 +57,7 @@ func NewNotificationsModel(client *api.Client) NotificationsModel {
 		spinner: items.NewSpinner(),
 		loading: true,
 		hasMore: true,
-		keys:    NewNotificationsKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
@@ -72,21 +72,19 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchNotifications())
-		case key.Matches(msg, m.keys.MarkAllRead):
-			return m, m.markAllRead()
-		case key.Matches(msg, m.keys.Open):
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NotificationItem:
 				n := it.Notification
@@ -112,6 +110,8 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreNotifications())
 				}
 			}
+		case m.keys.NotificationsKeybinds.MarkAllRead:
+			return m, m.markAllRead()
 		}
 
 	case tea.WindowSizeMsg:
@@ -195,16 +195,13 @@ func (m NotificationsModel) renderHeader(width int) string {
 }
 
 func (m NotificationsModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
+	helpView := m.help.View(m.keys.NotificationsHelpKeys())
 	paginatorView := m.list.Paginator.View()
 
 	helpWidth := lipgloss.Width(helpView)
 	paginatorWidth := lipgloss.Width(paginatorView)
 
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
+	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
 
 	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }

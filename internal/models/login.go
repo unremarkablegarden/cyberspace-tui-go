@@ -12,6 +12,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -25,7 +26,7 @@ type LoginModel struct {
 	client        *api.Client
 	width         int
 	height        int
-	keys          LoginKeyMap
+	keys          keymaps.LoginKeyMap
 	help          help.Model
 }
 
@@ -55,7 +56,7 @@ func NewLoginModel(client *api.Client) LoginModel {
 		passwordInput: pi,
 		focusIndex:    0,
 		client:        client,
-		keys:          NewLoginKeyMap(),
+		keys:          keymaps.NewLoginKeyMap(),
 		help:          h,
 	}
 }

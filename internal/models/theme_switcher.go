@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -25,13 +25,13 @@ type ThemeSwitcherModel struct {
 	cursor        int
 	width         int
 	height        int
-	keys          ThemeSwitcherKeyMap
+	keys          keymaps.AppKeybinds
 	help          help.Model
 	originalTheme string // theme active when switcher was opened, for reverting on ESC
 }
 
 // NewThemeSwitcherModel creates a new theme switcher
-func NewThemeSwitcherModel() ThemeSwitcherModel {
+func NewThemeSwitcherModel(keymap keymaps.AppKeybinds) ThemeSwitcherModel {
 	themes := styles.ListThemes()
 	current := styles.CurrentThemeName()
 
@@ -49,7 +49,7 @@ func NewThemeSwitcherModel() ThemeSwitcherModel {
 	return ThemeSwitcherModel{
 		themes:        themes,
 		cursor:        cursor,
-		keys:          NewThemeSwitcherKeyMap(),
+		keys:          keymap,
 		help:          h,
 		originalTheme: current,
 	}
@@ -62,22 +62,22 @@ func (m ThemeSwitcherModel) Init() tea.Cmd {
 func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Close):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Back:
 			// Revert to original theme
 			_ = styles.ApplyTheme(m.originalTheme)
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Down):
+		case m.keys.GlobalKeybinds.Down:
 			if m.cursor < len(m.themes)-1 {
 				m.cursor++
 				m.previewTheme()
 			}
-		case key.Matches(msg, m.keys.Up):
+		case m.keys.GlobalKeybinds.Up:
 			if m.cursor > 0 {
 				m.cursor--
 				m.previewTheme()
 			}
-		case key.Matches(msg, m.keys.Apply):
+		case m.keys.GlobalKeybinds.Open:
 			if m.cursor < len(m.themes) {
 				// Theme is already applied via preview, just confirm it
 				selected := m.themes[m.cursor]
@@ -136,7 +136,7 @@ func (m ThemeSwitcherModel) View() string {
 	}
 
 	content.WriteString("\n")
-	content.WriteString(m.help.View(m.keys))
+	content.WriteString(m.help.View(m.keys.ThemeSwitcherHelpKeys()))
 
 	// Wrap in a titled box
 	boxWidth := 60

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,6 +15,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -38,7 +38,7 @@ type ProfileModel struct {
 	hasMore         bool
 	width           int
 	height          int
-	keys            ProfileKeyMap
+	keys            keymaps.AppKeybinds
 	help            help.Model
 	prevMsg         messages.PrevMessage
 	// follow state
@@ -49,7 +49,13 @@ type ProfileModel struct {
 }
 
 // NewProfileModel creates a new profile screen for the given username
-func NewProfileModel(client *api.Client, username, currentUsername string, prevMsg messages.PrevMessage) ProfileModel {
+func NewProfileModel(
+	client *api.Client,
+	keymap keymaps.AppKeybinds,
+	username,
+	currentUsername string,
+	prevMsg messages.PrevMessage,
+) ProfileModel {
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -77,7 +83,7 @@ func NewProfileModel(client *api.Client, username, currentUsername string, prevM
 		client:          client,
 		spinner:         items.NewSpinner(),
 		loading:         true,
-		keys:            NewProfileKeyMap(),
+		keys:            keymap,
 		help:            h,
 		prevMsg:         prevMsg,
 	}
@@ -93,35 +99,8 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			return m, nil
-		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg {
-				if m.prevMsg != nil {
-					return m.prevMsg
-				}
-				return messages.SwitchToFeed{}
-			}
-		case key.Matches(msg, m.keys.Refresh):
-			m.loading = true
-			m.err = nil
-			m.followLoaded = false
-			return m, tea.Batch(m.spinner.Tick, m.fetchProfile())
-		case key.Matches(msg, m.keys.Follow):
-			if !m.isOwnProfile && m.followLoaded && !m.followPending {
-				m.followPending = true
-				return m, tea.Batch(m.spinner.Tick, m.toggleFollow())
-			}
-		case key.Matches(msg, m.keys.EditProfile):
-			if m.isOwnProfile {
-				user := m.user
-				return m, func() tea.Msg { return messages.SwitchToEditProfile{User: user} }
-			}
-		case key.Matches(msg, m.keys.Open):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.PostItem:
 				post := it.Post
@@ -136,6 +115,33 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
 				}
+			}
+		case m.keys.GlobalKeybinds.Quit:
+			return m, tea.Quit
+		case m.keys.GlobalKeybinds.Help:
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+		case m.keys.GlobalKeybinds.Back:
+			return m, func() tea.Msg {
+				if m.prevMsg != nil {
+					return m.prevMsg
+				}
+				return messages.SwitchToFeed{}
+			}
+		case m.keys.GlobalKeybinds.Refresh:
+			m.loading = true
+			m.err = nil
+			m.followLoaded = false
+			return m, tea.Batch(m.spinner.Tick, m.fetchProfile())
+		case m.keys.ProfileKeybinds.Follow:
+			if !m.isOwnProfile && m.followLoaded && !m.followPending {
+				m.followPending = true
+				return m, tea.Batch(m.spinner.Tick, m.toggleFollow())
+			}
+		case m.keys.ProfileKeybinds.EditProfile:
+			if m.isOwnProfile {
+				user := m.user
+				return m, func() tea.Msg { return messages.SwitchToEditProfile{User: user} }
 			}
 		}
 
@@ -163,10 +169,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		listHeight := msg.Height - profileHeaderHeight - 4
-		if listHeight < 1 {
-			listHeight = 1
-		}
+		listHeight := max(msg.Height-profileHeaderHeight-4, 1)
 		m.list.SetSize(msg.Width, listHeight)
 
 	case spinner.TickMsg:
@@ -259,10 +262,7 @@ func (m ProfileModel) View() string {
 
 func (m ProfileModel) renderProfileInfo(width int) string {
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorDim)
-	innerWidth := width - 4
-	if innerWidth < 40 {
-		innerWidth = 40
-	}
+	innerWidth := max(width-4, 40)
 
 	var content strings.Builder
 
@@ -327,14 +327,11 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 
 	// Render content lines inside box
 	var mid strings.Builder
-	for _, line := range strings.Split(strings.TrimRight(content.String(), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(content.String(), "\n"), "\n") {
 		wrappedLines := items.WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
 			lineWidth := lipgloss.Width(wl)
-			pad := innerWidth - lineWidth
-			if pad < 0 {
-				pad = 0
-			}
+			pad := max(innerWidth-lineWidth, 0)
 			mid.WriteString(borderStyle.Render("│") + " " + wl + strings.Repeat(" ", pad) + " " + borderStyle.Render("│") + "\n")
 		}
 	}
@@ -343,16 +340,13 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 }
 
 func (m ProfileModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
+	helpView := m.help.View(m.keys.ProfileKeybinds)
 	paginatorView := m.list.Paginator.View()
 
 	helpWidth := lipgloss.Width(helpView)
 	paginatorWidth := lipgloss.Width(paginatorView)
 
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
+	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
 
 	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
@@ -366,10 +360,7 @@ func (m ProfileModel) Username() string {
 func (m *ProfileModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	listHeight := height - profileHeaderHeight - 4
-	if listHeight < 1 {
-		listHeight = 1
-	}
+	listHeight := max(height-profileHeaderHeight-4, 1)
 	m.list.SetSize(width, listHeight)
 }
 

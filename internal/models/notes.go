@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +14,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -30,7 +30,7 @@ type NotesModel struct {
 	hasMore          bool
 	width            int
 	height           int
-	keys             NotesKeyMap
+	keys             keymaps.AppKeybinds
 	help             help.Model
 	confirmingDelete bool
 	deletingNoteID   string
@@ -38,7 +38,7 @@ type NotesModel struct {
 }
 
 // NewNotesModel creates a new notes list screen
-func NewNotesModel(client *api.Client) NotesModel {
+func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds) NotesModel {
 	l := list.New([]list.Item{}, items.NoteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -60,7 +60,7 @@ func NewNotesModel(client *api.Client) NotesModel {
 		client:  client,
 		spinner: items.NewSpinner(),
 		loading: true,
-		keys:    NewNotesKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
@@ -89,32 +89,19 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
-		case key.Matches(msg, m.keys.New):
-			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
-		case key.Matches(msg, m.keys.Edit):
-			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
-				note := ni.Note
-				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
-			}
-		case key.Matches(msg, m.keys.Delete):
-			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
-				m.confirmingDelete = true
-				m.deletingNoteID = ni.Note.ID
-				return m, nil
-			}
-		case key.Matches(msg, m.keys.Open):
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NoteItem:
 				note := it.Note
@@ -124,6 +111,20 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreNotes())
 				}
+			}
+
+		case m.keys.NotesKeybinds.New:
+			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
+		case m.keys.NotesKeybinds.Edit:
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
+				note := ni.Note
+				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
+			}
+		case m.keys.NotesKeybinds.Delete:
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
+				m.confirmingDelete = true
+				m.deletingNoteID = ni.Note.ID
+				return m, nil
 			}
 		}
 
@@ -228,7 +229,7 @@ func (m NotesModel) View() string {
 }
 
 func (m NotesModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
+	helpView := m.help.View(m.keys.NotesHelpKeys())
 	helpWidth := lipgloss.Width(helpView)
 
 	var status string
@@ -242,10 +243,7 @@ func (m NotesModel) renderFooter(width int) string {
 	paginatorView := m.list.Paginator.View()
 	paginatorWidth := lipgloss.Width(paginatorView)
 
-	dividerWidth := width - helpWidth - statusWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
+	dividerWidth := max(width-helpWidth-statusWidth-paginatorWidth-2, 1)
 
 	return helpView + status + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
