@@ -7,13 +7,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -22,7 +22,7 @@ type BookmarksModel struct {
 	list        list.Model
 	loading     bool
 	loadingMore bool
-	spinner     spinner.Model
+	spinner     *spinner.Model
 	err         error
 	client      *api.Client
 	nextCursor  string
@@ -34,7 +34,7 @@ type BookmarksModel struct {
 }
 
 // NewBookmarksModel creates a new bookmarks screen
-func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds) BookmarksModel {
+func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds, sp *spinner.Model) BookmarksModel {
 	delegate := items.BookmarkDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -55,7 +55,7 @@ func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds) Bookmar
 	return BookmarksModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		spinner: sp,
 		loading: true,
 		hasMore: true,
 		keys:    keybinds,
@@ -133,11 +133,6 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.BookmarksLoadedMsg:
 		m.loading = false
 		m.loadingMore = false
@@ -190,57 +185,36 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m BookmarksModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		return m.renderLoadingScreen(w, h)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "RETRIEVING SAVED DATA",
+				SubtitleText: " Loading bookmarks...",
+				BottomText:   "Accessing your saved transmissions...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		return m.renderErrorScreen(w, h)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(m.renderHeader(w))
+	b.WriteString(ui.RenderHeader("▓▒░ BOOKMARKS ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.BookmarksHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
-	_ = h
 	return b.String()
-}
-
-func (m BookmarksModel) renderHeader(width int) string {
-	return items.RenderHeader("▓▒░ BOOKMARKS ░▒▓", width)
-}
-
-func (m BookmarksModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys.BookmarksHelpKeys())
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
-}
-
-func (m BookmarksModel) renderLoadingScreen(width, height int) string {
-	loadingBox := styles.DataBox("RETRIEVING SAVED DATA",
-		"\n"+
-			"  "+m.spinner.View()+styles.Normal.Render(" Loading bookmarks...")+"\n"+
-			"\n"+
-			"  "+styles.Dim.Render("Accessing your saved transmissions...")+"\n",
-		50)
-	return items.FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-func (m BookmarksModel) renderErrorScreen(width, height int) string {
-	errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-		"\n\n" +
-		styles.Dim.Render("Press [r] to retry, [esc] to go back")
-	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 // SetSize updates the view dimensions

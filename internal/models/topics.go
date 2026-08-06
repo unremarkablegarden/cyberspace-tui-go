@@ -7,19 +7,19 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
 type TopicsModel struct {
 	list    list.Model
 	loading bool
-	spinner spinner.Model
+	spinner *spinner.Model
 	err     error
 	client  *api.Client
 	width   int
@@ -28,7 +28,7 @@ type TopicsModel struct {
 	help    help.Model
 }
 
-func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds) TopicsModel {
+func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) TopicsModel {
 	delegate := items.TopicDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -49,7 +49,7 @@ func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds) TopicsModel 
 	return TopicsModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		spinner: sp,
 		loading: true,
 		keys:    keymap,
 		help:    h,
@@ -86,11 +86,6 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.TopicsLoadedMsg:
 		m.loading = false
 		localItems := make([]list.Item, len(msg.Topics))
@@ -120,38 +115,35 @@ func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m TopicsModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("INDEXING TOPICS",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading topics...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Scanning the datastream...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "INDEXING TOPICS",
+				SubtitleText: " Loading topics...",
+				BottomText:   "Scanning the datastream...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [esc] to go back")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ TOPICS ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ TOPICS ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.TopicsHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
-	helpView := m.help.View(m.keys.TopicsHelpKeys())
-	paginatorView := m.list.Paginator.View()
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-	dividerWidth := max(w-helpWidth-paginatorWidth-2, 1)
-	b.WriteString(helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView)
-
-	_ = h
 	return b.String()
 }
 

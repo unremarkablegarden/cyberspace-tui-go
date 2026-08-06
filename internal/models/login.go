@@ -11,8 +11,8 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -125,7 +125,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m LoginModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 	var b strings.Builder
 
 	// Top scan line effect
@@ -185,10 +185,7 @@ func (m LoginModel) View() string {
 	form.WriteString("\n")
 
 	// Wrap in titled box
-	boxWidth := 60
-	if w < 65 {
-		boxWidth = w - 6
-	}
+	boxWidth := min(60, w-6)
 	box := styles.TitledBox("SECURE LOGIN TERMINAL", form.String(), boxWidth)
 
 	// Center the box

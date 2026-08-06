@@ -17,6 +17,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -30,7 +31,7 @@ type PostDetailModel struct {
 	post             entities.Post
 	replies          []entities.Reply
 	loading          bool
-	spinner          spinner.Model
+	spinner          *spinner.Model
 	err              error
 	client           *api.Client
 	postID           string
@@ -58,6 +59,7 @@ type PostDetailModel struct {
 func NewPostDetailModel(
 	client *api.Client,
 	keymap keymaps.AppKeybinds,
+	sp *spinner.Model,
 	post entities.Post,
 	currentUsername string,
 	prevMsg messages.PrevMessage,
@@ -70,7 +72,7 @@ func NewPostDetailModel(
 		postID:          post.ID,
 		post:            post,
 		currentUsername: currentUsername,
-		spinner:         items.NewSpinner(),
+		spinner:         sp,
 		loading:         true,
 		keys:            keymap,
 		help:            h,
@@ -79,7 +81,7 @@ func NewPostDetailModel(
 		prevMsg:         prevMsg,
 	}
 	// Pre-populate viewport so post shows immediately while replies load
-	w, _ := items.SafeDimensions(0, 0)
+	w, _ := ui.SafeDimensions(0, 0)
 	m.viewport.SetContent(m.buildContent(w))
 	return m
 }
@@ -199,21 +201,11 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.buildContent(msg.Width))
 		}
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		// Rebuild viewport content while loading so spinner animates
-		if m.loading && m.post.ID != "" {
-			w, _ := items.SafeDimensions(m.width, m.height)
-			m.viewport.SetContent(m.buildContent(w))
-		}
-		return m, cmd
-
 	case messages.PostDetailLoadedMsg:
 		m.loading = false
 		m.post = msg.Post
 		m.replies = msg.Replies
-		w, _ := items.SafeDimensions(m.width, m.height)
+		w, _ := ui.SafeDimensions(m.width, m.height)
 		m.viewport.SetContent(m.buildContent(w))
 		m.viewport.GotoTop()
 
@@ -239,7 +231,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bookmarking = false
 		m.bookmarked = true
 		m.post.BookmarksCount++
-		w, _ := items.SafeDimensions(m.width, m.height)
+		w, _ := ui.SafeDimensions(m.width, m.height)
 		m.viewport.SetContent(m.buildContent(w))
 
 	case messages.PostBookmarkAddedErrMsg:
@@ -262,7 +254,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.replyInput.BlurredStyle = m.replyInput.FocusedStyle
 		// Rebuild content with new theme colors
 		if m.post.ID != "" {
-			w, _ := items.SafeDimensions(m.width, m.height)
+			w, _ := ui.SafeDimensions(m.width, m.height)
 			m.viewport.SetContent(m.buildContent(w))
 		}
 
@@ -277,20 +269,28 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m PostDetailModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading && m.post.ID == "" {
-		return m.renderLoadingScreen(w, h)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "DECRYPTING TRANSMISSION",
+				SubtitleText: " Accessing secured data...",
+				BottomText:   "Decoding neural patterns...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		return m.renderErrorScreen(w, h)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
 
 	// Header
-	b.WriteString(m.renderHeader(w))
+	b.WriteString(ui.RenderHeader("▓▒░ ENTRY VIEWER ░▒▓", w))
 
 	// Viewport content
 	b.WriteString(m.viewport.View())
@@ -310,10 +310,6 @@ func (m PostDetailModel) View() string {
 	b.WriteString(m.renderFooter(w))
 
 	return b.String()
-}
-
-func (m PostDetailModel) renderHeader(width int) string {
-	return items.RenderHeader("▓▒░ ENTRY VIEWER ░▒▓", width) + "\n"
 }
 
 func (m PostDetailModel) renderFooter(width int) string {
@@ -518,25 +514,6 @@ func (m PostDetailModel) sendReply(content string) tea.Cmd {
 		}
 		return messages.PostReplyCreatedMsg{ReplyID: replyID}
 	}
-}
-
-func (m PostDetailModel) renderLoadingScreen(width, height int) string {
-	loadingBox := styles.DataBox("DECRYPTING TRANSMISSION",
-		"\n"+
-			"  "+m.spinner.View()+styles.Normal.Render(" Accessing secured data...")+"\n"+
-			"\n"+
-			"  "+styles.Dim.Render("Decoding neural patterns...")+"\n",
-		50)
-
-	return items.FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-func (m PostDetailModel) renderErrorScreen(width, height int) string {
-	errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-		"\n\n" +
-		styles.Dim.Render("Press [ESC] to return to feed, [r] to retry")
-
-	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 func (m PostDetailModel) buildContent(width int) string {

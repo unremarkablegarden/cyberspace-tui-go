@@ -7,11 +7,11 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -149,36 +149,24 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MenuModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, _ := ui.SafeDimensions(m.width, m.height)
 
 	var b strings.Builder
 
 	// Header: centered title with blocks on each side
-	b.WriteString(m.renderHeader(w))
+	b.WriteString(ui.RenderHeader("▓▒░ ᗰєภย ░▒▓", w))
 
 	// List content (title disabled, we render our own header)
 	b.WriteString(m.list.View())
 
 	// Footer: divider with paginator inline on the right
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
-	_ = h // height managed by list.SetSize
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keybinds.MenuHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
+
 	return b.String()
-}
-
-func (m MenuModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keybinds.MenuHelpKeys())
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	// help ────── paginator
-	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
-}
-
-func (m MenuModel) renderHeader(width int) string {
-	return items.RenderHeader("▓▒░ ᗰєภย ░▒▓", width)
 }

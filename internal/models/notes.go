@@ -8,13 +8,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -23,7 +23,7 @@ type NotesModel struct {
 	list             list.Model
 	loading          bool
 	loadingMore      bool
-	spinner          spinner.Model
+	spinner          *spinner.Model
 	err              error
 	client           *api.Client
 	nextCursor       string
@@ -38,7 +38,7 @@ type NotesModel struct {
 }
 
 // NewNotesModel creates a new notes list screen
-func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds) NotesModel {
+func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) NotesModel {
 	l := list.New([]list.Item{}, items.NoteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -58,7 +58,7 @@ func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds) NotesModel {
 	return NotesModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		spinner: sp,
 		loading: true,
 		keys:    keymap,
 		help:    h,
@@ -141,11 +141,6 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.NotesLoadedMsg:
 		m.loading = false
 		m.loadingMore = false
@@ -192,27 +187,26 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m NotesModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("ACCESSING PRIVATE NOTES",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading notes...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Retrieving encrypted data...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "ACCESSING PRIVATE NOTES",
+				SubtitleText: " Loading notes...",
+				BottomText:   "Retrieving encrypted data...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
 
 	noteCount := len(m.list.Items())
 	label := fmt.Sprintf("  %d notes", noteCount)
@@ -223,29 +217,13 @@ func (m NotesModel) View() string {
 
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(ui.RenderFooterWithList(
+		m.help.View(m.keys.NotesHelpKeys()),
+		m.list.Paginator.View(),
+		w,
+	))
 
 	return b.String()
-}
-
-func (m NotesModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys.NotesHelpKeys())
-	helpWidth := lipgloss.Width(helpView)
-
-	var status string
-	if m.confirmingDelete {
-		status = styles.Error.Render(" delete note? [y/n]")
-	} else if m.deleting {
-		status = styles.Dim.Render(" [deleting...]")
-	}
-	statusWidth := lipgloss.Width(status)
-
-	paginatorView := m.list.Paginator.View()
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := max(width-helpWidth-statusWidth-paginatorWidth-2, 1)
-
-	return helpView + status + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 // SetSize updates the view dimensions

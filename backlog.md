@@ -28,3 +28,4 @@ Stuff found while working on the code
 - [ ] Support images in terminals that support _TGP_
 - [ ] Expand button in feed screen
 - [ ] Settings should wrap theme and friendly keymaps remap
+- [ ] Support for custom footer messages

@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
@@ -15,6 +14,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -24,7 +24,7 @@ type TopicFeedModel struct {
 	list        list.Model
 	loading     bool
 	loadingMore bool
-	spinner     spinner.Model
+	spinner     *spinner.Model
 	err         error
 	client      *api.Client
 	nextCursor  string
@@ -35,7 +35,7 @@ type TopicFeedModel struct {
 	help        help.Model
 }
 
-func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, topic entities.Topic) TopicFeedModel {
+func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -57,7 +57,7 @@ func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, topic ent
 		topic:   topic,
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		spinner: sp,
 		loading: true,
 		hasMore: true,
 		keys:    keymap,
@@ -141,11 +141,6 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.TopicPostsLoadedMsg:
 		m.loading = false
 		m.loadingMore = false
@@ -182,42 +177,36 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m TopicFeedModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("FILTERING FEED",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading ["+m.topic.Name+"]...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Filtering transmissions by topic...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "FILTERING FEED",
+				SubtitleText: " Loading [" + m.topic.Name + "]...",
+				BottomText:   "Filtering transmissions by topic...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [r] to retry, [esc] to go back")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.TopicFeedHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
-	_ = h
 	return b.String()
-}
-
-func (m TopicFeedModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys.TopicFeedHelpKeys())
-	paginatorView := m.list.Paginator.View()
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 func (m *TopicFeedModel) SetSize(width, height int) {

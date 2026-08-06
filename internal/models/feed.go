@@ -7,13 +7,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -22,7 +22,7 @@ type FeedModel struct {
 	list        list.Model
 	loading     bool
 	loadingMore bool
-	spinner     spinner.Model
+	spinner     *spinner.Model
 	err         error
 	client      *api.Client
 	nextCursor  string
@@ -34,7 +34,7 @@ type FeedModel struct {
 }
 
 // NewFeedModel creates a new feed screen
-func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds) FeedModel {
+func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) FeedModel {
 	// Create list with custom delegate
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -61,7 +61,7 @@ func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds) FeedModel {
 	return FeedModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		spinner: sp,
 		loading: true,
 		hasMore: true,
 		keys:    keymap,
@@ -82,9 +82,6 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "esc":
-			// esc never quits — swallow it on the feed screen
-			return m, nil
 		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
 		case m.keys.GlobalKeybinds.Help:
@@ -148,11 +145,6 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reserve space for our custom header (2 lines) and footer (2 lines)
 		m.list.SetSize(msg.Width, msg.Height-4)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.FeedLoadedMsg:
 		m.loading = false
 		m.loadingMore = false
@@ -189,67 +181,42 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m FeedModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		return m.renderLoadingScreen(w, h)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "ESTABLISHING CONNECTION",
+				SubtitleText: " Synchronizing with network...",
+				BottomText:   "Please wait while we access the datastream",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		return m.renderErrorScreen(w, h)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
 
 	// Header: centered title with blocks on each side
-	b.WriteString(m.renderHeader(w))
+	b.WriteString(ui.RenderHeader("▓▒░ ᑕ¥βєяรקค¢є ░▒▓", w))
 
 	// List content (title disabled, we render our own header)
 	b.WriteString(m.list.View())
 
 	// Footer: divider with paginator inline on the right
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.FeedHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
-	_ = h // height managed by list.SetSize
 	return b.String()
-}
-
-func (m FeedModel) renderHeader(width int) string {
-	return items.RenderHeader("▓▒░ ᑕ¥βєяรקค¢є ░▒▓", width)
-}
-
-func (m FeedModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys.FeedHelpKeys())
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
-}
-
-func (m FeedModel) renderLoadingScreen(width, height int) string {
-	var b strings.Builder
-
-	loadingBox := styles.DataBox("ESTABLISHING CONNECTION",
-		"\n"+
-			"  "+m.spinner.View()+styles.Normal.Render(" Synchronizing with network...")+"\n"+
-			"\n"+
-			"  "+styles.Dim.Render("Please wait while we access the datastream")+"\n",
-		50)
-
-	return items.FullScreen(b.String()+loadingBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-func (m FeedModel) renderErrorScreen(width, height int) string {
-	errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-		"\n\n" +
-		styles.Dim.Render("Press [r] to retry connection, [q] to disconnect")
-
-	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 // SetSize updates the view dimensions

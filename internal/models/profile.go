@@ -16,6 +16,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -31,7 +32,7 @@ type ProfileModel struct {
 	list            list.Model
 	loading         bool
 	loadingMore     bool
-	spinner         spinner.Model
+	spinner         *spinner.Model
 	err             error
 	client          *api.Client
 	nextCursor      string
@@ -52,6 +53,7 @@ type ProfileModel struct {
 func NewProfileModel(
 	client *api.Client,
 	keymap keymaps.AppKeybinds,
+	sp *spinner.Model,
 	username,
 	currentUsername string,
 	prevMsg messages.PrevMessage,
@@ -81,7 +83,7 @@ func NewProfileModel(
 		isOwnProfile:    isOwn,
 		list:            l,
 		client:          client,
-		spinner:         items.NewSpinner(),
+		spinner:         sp,
 		loading:         true,
 		keys:            keymap,
 		help:            h,
@@ -172,11 +174,6 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		listHeight := max(msg.Height-profileHeaderHeight-4, 1)
 		m.list.SetSize(msg.Width, listHeight)
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
 	case messages.ProfileLoadedMsg:
 		m.loading = false
 		m.loadingMore = false
@@ -231,31 +228,35 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ProfileModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("ACCESSING USER DATA",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading @"+m.username+"...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Retrieving profile data...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "ACCESSING USER DATA",
+				SubtitleText: "Loading @" + m.username + "...",
+				BottomText:   "Retrieving profile data...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ PROFILE ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ PROFILE ░▒▓", w))
 	b.WriteString(m.renderProfileInfo(w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.ProfileHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
 	return b.String()
 }
@@ -337,18 +338,6 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 	}
 
 	return top + "\n" + mid.String()
-}
-
-func (m ProfileModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys.ProfileKeybinds)
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := max(width-helpWidth-paginatorWidth-2, 1)
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 // Username returns the username this profile is showing

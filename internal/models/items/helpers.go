@@ -8,7 +8,6 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
@@ -16,10 +15,6 @@ import (
 )
 
 const (
-	DefaultSafeWidth       = 80
-	DefaultSafeHeight      = 24
-	DefaultMinWidth        = 10
-	DefaultMinHeight       = 10
 	DefaultMaxCardBoxLines = 5
 )
 
@@ -151,53 +146,6 @@ func StripMarkdown(s string) string {
 func StripMarkdownKeepNewlines(s string) string {
 	s = stripMarkdownCommon(s)
 	return strings.TrimSpace(s)
-}
-
-// SafeDimensions returns width and height with sensible defaults
-// Use this before WindowSizeMsg has been received
-func SafeDimensions(width, height int) (int, int) {
-	if width < DefaultMinWidth {
-		width = DefaultSafeWidth
-	}
-	if height < DefaultMinHeight {
-		height = DefaultSafeHeight
-	}
-
-	return width, height
-}
-
-// FullScreen renders content centered in a full-screen container.
-func FullScreen(content string, width, height int, hAlign, vAlign lipgloss.Position) string {
-	w, h := SafeDimensions(width, height)
-	return lipgloss.Place(w, h, hAlign, vAlign, content)
-}
-
-// RenderHeader renders a centered title bar with block-fill sides.
-func RenderHeader(title string, width int) string {
-	titleRendered := styles.Title.Render(title)
-	titleWidth := lipgloss.Width(titleRendered)
-
-	barStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
-
-	barWidth := max((width-titleWidth)/2, 0)
-	leftBar := barStyle.Render(strings.Repeat("█", barWidth))
-
-	rightBarWidth := max(width-titleWidth-barWidth, 0)
-	rightBar := barStyle.Render(strings.Repeat("█", rightBarWidth))
-
-	return leftBar + titleRendered + rightBar + "\n"
-}
-
-// NewSpinner creates a sci-fi styled spinner
-func NewSpinner() spinner.Model {
-	s := spinner.New()
-	// Use a sci-fi looking spinner
-	s.Spinner = spinner.Spinner{
-		Frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-		FPS:    time.Millisecond * 80,
-	}
-	s.Style = styles.Spinner
-	return s
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

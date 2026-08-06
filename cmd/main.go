@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
 	zone "github.com/lrstanley/bubblezone"
@@ -11,12 +12,14 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 )
 
 type MainModel struct {
 	ActiveModel tea.Model
 	CyberClient *api.Client
 	Config      appConfig
+	Spinner     spinner.Model
 }
 
 func (mm *MainModel) Init() tea.Cmd {
@@ -86,6 +89,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		postDetailModel := models.NewPostDetailModel(
 			mm.CyberClient,
 			mm.Config.Keybinds,
+			&mm.Spinner,
 			msg.Post,
 			"",
 			msg.BackMessage,
@@ -96,6 +100,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		profileModel := models.NewProfileModel(
 			mm.CyberClient,
 			mm.Config.Keybinds,
+			&mm.Spinner,
 			msg.Username,
 			mm.Config.Auth.Username,
 			msg.BackMessage,
@@ -106,6 +111,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		profileModel := models.NewProfileModel(
 			mm.CyberClient,
 			mm.Config.Keybinds,
+			&mm.Spinner,
 			mm.Config.Auth.Username,
 			mm.Config.Auth.Username,
 			nil,
@@ -113,23 +119,23 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = profileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToFeed:
-		feedModel := models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds)
+		feedModel := models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = feedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
-		notificationsModel := models.NewNotificationsModel(mm.CyberClient, mm.Config.Keybinds)
+		notificationsModel := models.NewNotificationsModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = notificationsModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToBookmarks:
-		bookmarksModel := models.NewBookmarksModel(mm.CyberClient, mm.Config.Keybinds)
+		bookmarksModel := models.NewBookmarksModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = bookmarksModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopics:
-		topicsModel := models.NewTopicsModel(mm.CyberClient, mm.Config.Keybinds)
+		topicsModel := models.NewTopicsModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = topicsModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopicFeed:
-		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, mm.Config.Keybinds, msg.Topic)
+		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner, msg.Topic)
 		mm.ActiveModel = topicFeedModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToCompose:
@@ -141,17 +147,23 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = editProfileModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotes:
-		notesModel := models.NewNotesModel(mm.CyberClient, mm.Config.Keybinds)
+		notesModel := models.NewNotesModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = notesModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNoteCompose:
-		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, msg.Note, msg.IsEdit)
+		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner, msg.Note, msg.IsEdit)
 		mm.ActiveModel = noteComposeModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)
 		mm.ActiveModel = themeSwitcherModel
 		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+
+	// Elements
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		mm.Spinner, cmd = mm.Spinner.Update(msg)
+		return mm, cmd
 
 		// Send message to active model to handle it there
 	default:
@@ -166,7 +178,9 @@ func (mm *MainModel) View() string {
 }
 
 func NewMainModel() *MainModel {
-	mm := &MainModel{}
+	mm := &MainModel{
+		Spinner: ui.NewSpinner(),
+	}
 
 	// 1. Load config
 	mm.loadConfig()
@@ -185,7 +199,7 @@ func NewMainModel() *MainModel {
 
 	// 6. Init whatever (login/feed)
 	if mm.Config.Auth.IDToken != "" && !mm.Config.Auth.IsExpired() {
-		mm.ActiveModel = models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds)
+		mm.ActiveModel = models.NewFeedModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner)
 	} else {
 		mm.ActiveModel = models.NewLoginModel(mm.CyberClient)
 	}

@@ -14,8 +14,8 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -33,11 +33,11 @@ type NoteComposeModel struct {
 	height      int
 	keys        keymaps.AppKeybinds
 	help        help.Model
-	spinner     spinner.Model
+	spinner     *spinner.Model
 }
 
 // NewNoteComposeModel creates a note compose/edit screen
-func NewNoteComposeModel(client *api.Client, keymap keymaps.AppKeybinds, note entities.Note, isEdit bool) NoteComposeModel {
+func NewNoteComposeModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model, note entities.Note, isEdit bool) NoteComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "Write your note..."
 	ta.SetHeight(10)
@@ -75,7 +75,7 @@ func NewNoteComposeModel(client *api.Client, keymap keymaps.AppKeybinds, note en
 		focused:     "content",
 		keys:        keymap,
 		help:        h,
-		spinner:     items.NewSpinner(),
+		spinner:     sp,
 	}
 }
 
@@ -125,13 +125,6 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.content.SetWidth(msg.Width - 8)
 		m.topicsInput.Width = msg.Width - 20
-
-	case spinner.TickMsg:
-		if m.saving {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
 
 	case messages.NoteComposeSaveMsg:
 		return m, func() tea.Msg { return messages.SwitchToNotes{} }
@@ -189,7 +182,7 @@ func (m NoteComposeModel) saveNote(content string, topics []string) tea.Cmd {
 }
 
 func (m NoteComposeModel) View() string {
-	w, _ := items.SafeDimensions(m.width, m.height)
+	w, _ := ui.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
@@ -203,7 +196,7 @@ func (m NoteComposeModel) View() string {
 	if m.isEdit {
 		header = "▓▒░ EDIT NOTE ░▒▓"
 	}
-	b.WriteString(items.RenderHeader(header, w))
+	b.WriteString(ui.RenderHeader(header, w))
 	b.WriteString("\n")
 
 	title := "COMPOSE"
