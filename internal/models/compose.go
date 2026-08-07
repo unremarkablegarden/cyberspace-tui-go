@@ -232,7 +232,7 @@ func (m ComposeModel) View() string {
 	b.WriteString("\n")
 
 	// Content textarea
-	for _, line := range strings.Split(m.content.View(), "\n") {
+	for line := range strings.SplitSeq(m.content.View(), "\n") {
 		b.WriteString(borderStyle.Render("│ "))
 		b.WriteString(line)
 		b.WriteString("\n")

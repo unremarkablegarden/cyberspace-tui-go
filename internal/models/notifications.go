@@ -228,16 +228,3 @@ func (m NotificationsModel) markAllRead() tea.Cmd {
 		return nil
 	}
 }
-
-// itoa converts an int to string without importing strconv everywhere
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	result := ""
-	for n > 0 {
-		result = string(rune('0'+n%10)) + result
-		n /= 10
-	}
-	return result
-}

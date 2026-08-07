@@ -210,13 +210,10 @@ func (m LoginModel) View() string {
 	// Calculate vertical centering
 	content := b.String()
 	contentLines := strings.Count(content, "\n") + 1
-	topPad := (h - contentLines - 1) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
+	topPad := max((h-contentLines-1)/2, 0)
 
 	var result strings.Builder
-	for i := 0; i < topPad; i++ {
+	for range topPad {
 		result.WriteString("\n")
 	}
 	result.WriteString(content)
