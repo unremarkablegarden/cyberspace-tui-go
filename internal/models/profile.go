@@ -13,6 +13,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -35,6 +36,7 @@ type ProfileModel struct {
 	spinner         *spinner.Model
 	err             error
 	client          *api.Client
+	cache           cache.ICache
 	nextCursor      string
 	hasMore         bool
 	width           int
@@ -52,6 +54,7 @@ type ProfileModel struct {
 // NewProfileModel creates a new profile screen for the given username
 func NewProfileModel(
 	client *api.Client,
+	cache cache.ICache,
 	keymap keymaps.AppKeybinds,
 	sp *spinner.Model,
 	username,
@@ -83,6 +86,7 @@ func NewProfileModel(
 		isOwnProfile:    isOwn,
 		list:            l,
 		client:          client,
+		cache:           cache,
 		spinner:         sp,
 		loading:         true,
 		keys:            keymap,
@@ -92,7 +96,7 @@ func NewProfileModel(
 }
 
 func (m ProfileModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchProfile())
+	return tea.Batch(m.spinner.Tick, m.fetchProfile(false))
 }
 
 func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -134,7 +138,7 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			m.err = nil
 			m.followLoaded = false
-			return m, tea.Batch(m.spinner.Tick, m.fetchProfile())
+			return m, tea.Batch(m.spinner.Tick, m.fetchProfile(true))
 		case m.keys.ProfileKeybinds.Follow:
 			if !m.isOwnProfile && m.followLoaded && !m.followPending {
 				m.followPending = true
@@ -353,45 +357,156 @@ func (m *ProfileModel) SetSize(width, height int) {
 	m.list.SetSize(width, listHeight)
 }
 
-func (m ProfileModel) fetchProfile() tea.Cmd {
+func (m ProfileModel) fetchProfile(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		user, err := m.client.FetchUser(m.username)
-		if err != nil {
-			return messages.ProfileLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.profileFromAPI()
 		}
-		posts, cursor, err := m.client.FetchUserPosts(m.username, 20)
-		if err != nil {
-			return messages.ProfileLoadedErrMsg{Err: err}
+
+		cacheUser, userFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "user")
+		cachePosts, postsFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "posts")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "cursor")
+
+		if !userFound || !postsFound || !cursorFound {
+			return m.profileFromAPI()
 		}
-		return messages.ProfileLoadedMsg{User: *user, Posts: posts, Cursor: cursor}
+
+		user, ok := cacheUser.(entities.User)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		posts, ok := cachePosts.([]entities.Post)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		return messages.ProfileLoadedMsg{
+			User:   user,
+			Posts:  posts,
+			Cursor: cursor,
+		}
+	}
+}
+
+func (m ProfileModel) fetchFollowStatus() tea.Cmd {
+	return func() tea.Msg {
+		cacheFollowID, found := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "followID")
+		if !found {
+			return m.followStatusFromAPI()
+		}
+
+		followID, ok := cacheFollowID.(string)
+		if !ok {
+			return m.followStatusFromAPI()
+		}
+
+		return messages.ProfileFollowMsg{
+			IsFollowing:    followID != "",
+			FollowID:       followID,
+			InitialLoading: true,
+		}
 	}
 }
 
 func (m ProfileModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchMoreUserPosts(m.username, 20, m.nextCursor)
+		var posts []entities.Post
+
+		if p, found := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "posts"); !found {
+			apiPosts, apiCursor, err := m.syncProfilePostsFromAPI()
+			if err != nil {
+				return messages.FeedErrorMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			posts = apiPosts
+		} else {
+			posts = p.([]entities.Post)
+		}
+
+		additionalPosts, cursor, err := m.client.FetchMoreUserPosts(m.username, 20, m.nextCursor)
 		if err != nil {
 			return messages.ProfileLoadedErrMsg{Err: err}
 		}
-		return messages.ProfileLoadedMsg{User: m.user, Posts: posts, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"posts", append(posts, additionalPosts...), 0)
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"cursor", cursor, 0)
+
+		return messages.ProfileLoadedMsg{User: m.user, Posts: additionalPosts, Cursor: cursor, IsAdditional: true}
 	}
 }
 
-func (m ProfileModel) fetchFollowStatus() tea.Cmd {
-	userID := m.user.ID
-	return func() tea.Msg {
-		follows, err := m.client.FetchMyFollowing(50)
-		if err != nil {
-			// Non-fatal: just show follow button without status
-			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
-		}
-		for _, f := range follows {
-			if f.FollowedID == userID {
-				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: f.ID, InitialLoading: true}
-			}
-		}
-		return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
+func (m ProfileModel) profileFromAPI() tea.Msg {
+	user, err := m.syncProfileUserFromAPI()
+	if err != nil {
+		return messages.ProfileLoadedErrMsg{Err: err}
 	}
+
+	posts, cursor, err := m.syncProfilePostsFromAPI()
+	if err != nil {
+		return messages.ProfileLoadedErrMsg{Err: err}
+	}
+
+	return messages.ProfileLoadedMsg{
+		User:   user,
+		Posts:  posts,
+		Cursor: cursor,
+	}
+}
+
+func (m ProfileModel) followStatusFromAPI() tea.Msg {
+	followID := m.syncProfileFollowStatus()
+
+	return messages.ProfileFollowMsg{IsFollowing: followID != "", FollowID: followID, InitialLoading: true}
+}
+
+func (m ProfileModel) syncProfileFollowStatus() string {
+	follows, err := m.client.FetchMyFollowing(50)
+	// Non-fatal: just show follow button without status
+	if err != nil {
+		return ""
+	}
+
+	followID := ""
+	for _, f := range follows {
+		if f.FollowedID == m.user.ID {
+			followID = f.ID
+			break
+		}
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", followID, 0)
+
+	return followID
+}
+
+func (m ProfileModel) syncProfileUserFromAPI() (entities.User, error) {
+	user, err := m.client.FetchUser(m.username)
+	if err != nil {
+		return entities.User{}, err
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"user", user, 0)
+
+	return user, nil
+}
+
+func (m ProfileModel) syncProfilePostsFromAPI() ([]entities.Post, string, error) {
+	posts, cursor, err := m.client.FetchUserPosts(m.username, 20)
+	if err != nil {
+		return []entities.Post{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"posts", posts, 0)
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"cursor", cursor, 0)
+
+	return posts, cursor, nil
 }
 
 func (m ProfileModel) toggleFollow() tea.Cmd {
@@ -401,16 +516,19 @@ func (m ProfileModel) toggleFollow() tea.Cmd {
 			if err := m.client.Unfollow(followID); err != nil {
 				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: followID}
 			}
+
+			m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", "", 0)
 			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
 	}
 
-	userID := m.user.ID
 	return func() tea.Msg {
-		newFollowID, err := m.client.FollowUser(userID)
+		newFollowID, err := m.client.FollowUser(m.user.ID)
 		if err != nil {
 			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
+
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", newFollowID, 0)
 		return messages.ProfileFollowMsg{IsFollowing: true, FollowID: newFollowID}
 	}
 }

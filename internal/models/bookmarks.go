@@ -9,7 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -25,6 +27,7 @@ type BookmarksModel struct {
 	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
@@ -34,7 +37,7 @@ type BookmarksModel struct {
 }
 
 // NewBookmarksModel creates a new bookmarks screen
-func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds, sp *spinner.Model) BookmarksModel {
+func NewBookmarksModel(client *api.Client, cache cache.ICache, keybinds keymaps.AppKeybinds, sp *spinner.Model) BookmarksModel {
 	delegate := items.BookmarkDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -55,6 +58,7 @@ func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds, sp *spi
 	return BookmarksModel{
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		hasMore: true,
@@ -64,7 +68,7 @@ func NewBookmarksModel(client *api.Client, keybinds keymaps.AppKeybinds, sp *spi
 }
 
 func (m BookmarksModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchBookmarks())
+	return tea.Batch(m.spinner.Tick, m.fetchBookmarks(false))
 }
 
 func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -84,7 +88,7 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks())
+			return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks(true))
 		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.BookmarkItem:
@@ -152,17 +156,9 @@ func (m BookmarksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 
 	case messages.BookmarkRemovedMsg:
-		var localItems []list.Item
-		for _, existing := range m.list.Items() {
-			if bi, ok := existing.(items.BookmarkItem); ok {
-				if bi.Bookmark.ID == msg.BookmarkID {
-					continue
-				}
-			}
-			localItems = append(localItems, existing)
-		}
-		cmd := m.list.SetItems(localItems)
-		return m, cmd
+		m.loading = true
+
+		return m, tea.Batch(m.spinner.Tick, m.fetchBookmarks(true))
 
 	case messages.BookmarkRemovedErrMsg:
 		m.err = msg.Err
@@ -224,24 +220,84 @@ func (m *BookmarksModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m BookmarksModel) fetchBookmarks() tea.Cmd {
+func (m BookmarksModel) fetchBookmarks(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		bookmarks, cursor, err := m.client.FetchBookmarks(20)
-		if err != nil {
-			return messages.BookmarksLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.bookmarksFromAPI()
 		}
+
+		cacheBkmrk, bkmrkFound := m.cache.Get(cache.DefaultBookmarkCacheKey + "bookmarks")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultBookmarkCacheKey + "cursor")
+
+		if !bkmrkFound || !cursorFound {
+			return m.bookmarksFromAPI()
+		}
+
+		bookmarks, ok := cacheBkmrk.([]entities.Bookmark)
+		if !ok {
+			return m.bookmarksFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.bookmarksFromAPI()
+		}
+
 		return messages.BookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor}
 	}
 }
 
 func (m BookmarksModel) fetchMoreBookmarks() tea.Cmd {
 	return func() tea.Msg {
-		bookmarks, cursor, err := m.client.FetchMoreBookmarks(20, m.nextCursor)
+		var bookmarks []entities.Bookmark
+
+		if b, found := m.cache.Get(cache.DefaultBookmarkCacheKey + "bookmarks"); !found {
+			apiBk, apiCursor, err := m.syncBookmarksFromAPI()
+			if err != nil {
+				return messages.BookmarksLoadedErrMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			bookmarks = apiBk
+		} else {
+			bookmarks = b.([]entities.Bookmark)
+		}
+
+		additionalBookmarks, cursor, err := m.client.FetchMoreBookmarks(20, m.nextCursor)
 		if err != nil {
 			return messages.BookmarksLoadedErrMsg{Err: err}
 		}
-		return messages.BookmarksLoadedMsg{Bookmarks: bookmarks, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultBookmarkCacheKey+"bookmarks", append(bookmarks, additionalBookmarks...), 0)
+		m.cache.Set(cache.DefaultBookmarkCacheKey+"cursor", cursor, 0)
+
+		return messages.BookmarksLoadedMsg{
+			Bookmarks:    additionalBookmarks,
+			Cursor:       cursor,
+			IsAdditional: true,
+		}
 	}
+}
+
+func (m BookmarksModel) bookmarksFromAPI() tea.Msg {
+	b, c, err := m.syncBookmarksFromAPI()
+	if err != nil {
+		return messages.BookmarksLoadedErrMsg{Err: err}
+	}
+
+	return messages.BookmarksLoadedMsg{Bookmarks: b, Cursor: c}
+}
+
+func (m BookmarksModel) syncBookmarksFromAPI() ([]entities.Bookmark, string, error) {
+	bookmarks, cursor, err := m.client.FetchBookmarks(20)
+	if err != nil {
+		return []entities.Bookmark{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultBookmarkCacheKey+"bookmarks", bookmarks, 0)
+	m.cache.Set(cache.DefaultBookmarkCacheKey+"cursor", cursor, 0)
+
+	return bookmarks, cursor, nil
 }
 
 func (m BookmarksModel) deleteBookmark(bookmarkID string) tea.Cmd {

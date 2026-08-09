@@ -11,6 +11,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -27,6 +28,7 @@ type TopicFeedModel struct {
 	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
@@ -35,7 +37,7 @@ type TopicFeedModel struct {
 	help        help.Model
 }
 
-func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
+func NewTopicFeedModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -57,6 +59,7 @@ func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinn
 		topic:   topic,
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		hasMore: true,
@@ -66,7 +69,7 @@ func NewTopicFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinn
 }
 
 func (m TopicFeedModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchPosts())
+	return tea.Batch(m.spinner.Tick, m.fetchPosts(false))
 }
 
 func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -86,7 +89,7 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
+			return m, tea.Batch(m.spinner.Tick, m.fetchPosts(true))
 		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.PostItem:
@@ -215,22 +218,90 @@ func (m *TopicFeedModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m TopicFeedModel) fetchPosts() tea.Cmd {
+func (m TopicFeedModel) fetchPosts(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchTopicPosts(m.topic.Name, 30)
-		if err != nil {
-			return messages.TopicPostsLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.topicPostsFromAPI()
 		}
-		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor}
+
+		cachePosts, foundPosts := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "posts")
+		cacheCursor, foundCursor := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "cursor")
+
+		if !foundPosts || !foundCursor {
+			return m.topicPostsFromAPI()
+		}
+
+		posts, ok := cachePosts.([]entities.Post)
+		if !ok {
+			return m.topicPostsFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.topicPostsFromAPI()
+		}
+
+		return messages.TopicPostsLoadedMsg{
+			Posts:  posts,
+			Cursor: cursor,
+		}
 	}
+}
+
+func (m TopicFeedModel) topicPostsFromAPI() tea.Msg {
+	p, c, err := m.syncTopicPostsFromAPI()
+	if err != nil {
+		return messages.TopicPostsLoadedErrMsg{Err: err}
+	}
+
+	return messages.TopicPostsLoadedMsg{Posts: p, Cursor: c}
+}
+
+func (m TopicFeedModel) syncTopicPostsFromAPI() ([]entities.Post, string, error) {
+	posts, cursor, err := m.client.FetchTopicPosts(m.topic.Name, 30)
+	if err != nil {
+		return []entities.Post{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultTopicFeedCacheKey+m.topic.Name+"posts", posts, 0)
+	m.cache.Set(cache.DefaultTopicFeedCacheKey+m.topic.Name+"cursor", cursor, 0)
+
+	return posts, cursor, nil
 }
 
 func (m TopicFeedModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchMoreTopicPosts(m.topic.Name, 30, m.nextCursor)
+		var posts []entities.Post
+
+		if p, found := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "posts"); !found {
+			apiPosts, apiCursor, err := m.syncTopicPostsFromAPI()
+			if err != nil {
+				return messages.TopicPostsLoadedErrMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			posts = apiPosts
+		} else {
+			posts = p.([]entities.Post)
+		}
+
+		additionalPosts, cursor, err := m.client.FetchMoreTopicPosts(m.topic.Name, 30, m.nextCursor)
 		if err != nil {
 			return messages.TopicPostsLoadedErrMsg{Err: err}
 		}
-		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(
+			cache.DefaultTopicFeedCacheKey+m.topic.Name+"posts",
+			append(posts, additionalPosts...), 0)
+
+		m.cache.Set(
+			cache.DefaultTopicFeedCacheKey+m.topic.Name+"cursor",
+			cursor, 0)
+
+		return messages.TopicPostsLoadedMsg{
+			Posts:        additionalPosts,
+			Cursor:       cursor,
+			IsAdditional: true,
+		}
 	}
 }

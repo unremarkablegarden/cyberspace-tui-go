@@ -8,7 +8,9 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -24,6 +26,7 @@ type NotificationsModel struct {
 	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
@@ -33,7 +36,7 @@ type NotificationsModel struct {
 }
 
 // NewNotificationsModel creates a new notifications screen
-func NewNotificationsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) NotificationsModel {
+func NewNotificationsModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) NotificationsModel {
 	delegate := items.NotificationDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -54,6 +57,7 @@ func NewNotificationsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *s
 	return NotificationsModel{
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		hasMore: true,
@@ -63,7 +67,7 @@ func NewNotificationsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *s
 }
 
 func (m NotificationsModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchNotifications())
+	return tea.Batch(m.spinner.Tick, m.fetchNotifications(false))
 }
 
 func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -83,7 +87,7 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchNotifications())
+			return m, tea.Batch(m.spinner.Tick, m.fetchNotifications(true))
 		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NotificationItem:
@@ -195,24 +199,103 @@ func (m *NotificationsModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m NotificationsModel) fetchNotifications() tea.Cmd {
+func (m NotificationsModel) fetchNotifications(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		notifs, cursor, err := m.client.FetchNotifications(30)
-		if err != nil {
-			return messages.NotificationsErrorMsg{Err: err}
+		if isRefresh {
+			return m.notificationsFromAPI()
 		}
-		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor}
+
+		cacheNoti, notiFound := m.cache.Get(cache.DefaultNotificationCacheKey + "notifications")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultNotificationCacheKey + "cursor")
+
+		if !notiFound || !cursorFound {
+			return m.notificationsFromAPI()
+		}
+
+		notifs, ok := cacheNoti.([]entities.Notification)
+		if !ok {
+			return m.notificationsFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.notificationsFromAPI()
+		}
+
+		return messages.NotificationsLoadedMsg{
+			Notifications: notifs,
+			Cursor:        cursor,
+		}
 	}
 }
 
 func (m NotificationsModel) fetchMoreNotifications() tea.Cmd {
 	return func() tea.Msg {
-		notifs, cursor, err := m.client.FetchMoreNotifications(30, m.nextCursor)
+		var notifs []entities.Notification
+
+		if n, found := m.cache.Get(cache.DefaultNotificationCacheKey + "notifications"); !found {
+			apiNotis, apiCursor, err := m.syncNotificationsFromAPI()
+			if err != nil {
+				return messages.NotificationsErrorMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			notifs = apiNotis
+		} else {
+			notifs = n.([]entities.Notification)
+		}
+
+		additionalNotifs, cursor, err := m.client.FetchMoreNotifications(30, m.nextCursor)
 		if err != nil {
 			return messages.NotificationsErrorMsg{Err: err}
 		}
-		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(
+			cache.DefaultNotificationCacheKey+"notifications",
+			append(notifs, additionalNotifs...),
+			cache.DefaultExpirationNotifications,
+		)
+		m.cache.Set(
+			cache.DefaultNotificationCacheKey+"cursor",
+			cursor,
+			cache.DefaultExpirationNotifications,
+		)
+
+		return messages.NotificationsLoadedMsg{
+			Notifications: additionalNotifs,
+			Cursor:        cursor,
+			IsAdditional:  true,
+		}
 	}
+}
+
+func (m NotificationsModel) notificationsFromAPI() tea.Msg {
+	n, c, err := m.syncNotificationsFromAPI()
+	if err != nil {
+		return messages.NotificationsErrorMsg{Err: err}
+	}
+
+	return messages.NotificationsLoadedMsg{Notifications: n, Cursor: c}
+}
+
+func (m NotificationsModel) syncNotificationsFromAPI() ([]entities.Notification, string, error) {
+	notifications, cursor, err := m.client.FetchNotifications(30)
+	if err != nil {
+		return []entities.Notification{}, "", err
+	}
+
+	m.cache.Set(
+		cache.DefaultNotificationCacheKey+"notifications",
+		notifications,
+		cache.DefaultExpirationNotifications,
+	)
+	m.cache.Set(
+		cache.DefaultNotificationCacheKey+"cursor",
+		cursor,
+		cache.DefaultExpirationNotifications,
+	)
+
+	return notifications, cursor, nil
 }
 
 func (m NotificationsModel) markRead(notificationID string) tea.Cmd {

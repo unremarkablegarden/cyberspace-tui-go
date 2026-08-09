@@ -10,7 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -26,6 +28,7 @@ type NotesModel struct {
 	spinner          *spinner.Model
 	err              error
 	client           *api.Client
+	cache            cache.ICache
 	nextCursor       string
 	hasMore          bool
 	width            int
@@ -38,7 +41,7 @@ type NotesModel struct {
 }
 
 // NewNotesModel creates a new notes list screen
-func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) NotesModel {
+func NewNotesModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) NotesModel {
 	l := list.New([]list.Item{}, items.NoteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -58,6 +61,7 @@ func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.M
 	return NotesModel{
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		keys:    keymap,
@@ -66,7 +70,7 @@ func NewNotesModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.M
 }
 
 func (m NotesModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchNotes())
+	return tea.Batch(m.spinner.Tick, m.fetchNotes(false))
 }
 
 func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -100,7 +104,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
+			return m, tea.Batch(m.spinner.Tick, m.fetchNotes(true))
 		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NoteItem:
@@ -163,7 +167,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.NoteDeleteMsg:
 		m.loading = true
-		return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
+		return m, tea.Batch(m.spinner.Tick, m.fetchNotes(true))
 
 	case messages.NoteDeleteErrMsg:
 		m.deleting = false
@@ -233,23 +237,84 @@ func (m *NotesModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m NotesModel) fetchNotes() tea.Cmd {
+func (m NotesModel) fetchNotes(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		notes, cursor, err := m.client.FetchNotes(20)
-		if err != nil {
-			return messages.NotesLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.notesFromAPI()
 		}
-		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor}
+
+		cacheNotes, notesFound := m.cache.Get(cache.DefaultNotesCacheKey + "notes")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultNotesCacheKey + "cursor")
+
+		if !notesFound || !cursorFound {
+			return m.notesFromAPI()
+		}
+
+		notes, ok := cacheNotes.([]entities.Note)
+		if !ok {
+			return m.notesFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.notesFromAPI()
+		}
+
+		return messages.NotesLoadedMsg{
+			Notes:  notes,
+			Cursor: cursor,
+		}
 	}
+}
+
+func (m NotesModel) notesFromAPI() tea.Msg {
+	n, c, err := m.syncNotesFromAPI()
+	if err != nil {
+		return messages.NotesLoadedErrMsg{Err: err}
+	}
+	return messages.NotesLoadedMsg{Notes: n, Cursor: c}
+}
+
+func (m NotesModel) syncNotesFromAPI() ([]entities.Note, string, error) {
+	notes, cursor, err := m.client.FetchNotes(20)
+	if err != nil {
+		return []entities.Note{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultNotesCacheKey+"notes", notes, 0)
+	m.cache.Set(cache.DefaultNotesCacheKey+"cursor", cursor, 0)
+
+	return notes, cursor, nil
 }
 
 func (m NotesModel) fetchMoreNotes() tea.Cmd {
 	return func() tea.Msg {
-		notes, cursor, err := m.client.FetchMoreNotes(20, m.nextCursor)
+		var notes []entities.Note
+		if n, found := m.cache.Get(cache.DefaultNotesCacheKey + "notes"); !found {
+			apiNotes, apiCursor, err := m.syncNotesFromAPI()
+			if err != nil {
+				return messages.NotesLoadedErrMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			notes = apiNotes
+		} else {
+			notes = n.([]entities.Note)
+		}
+
+		additionalNotes, cursor, err := m.client.FetchMoreNotes(20, m.nextCursor)
 		if err != nil {
 			return messages.NotesLoadedErrMsg{Err: err}
 		}
-		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultNotesCacheKey+"notes", append(notes, additionalNotes...), 0)
+		m.cache.Set(cache.DefaultNotesCacheKey+"cursor", cursor, 0)
+
+		return messages.NotesLoadedMsg{
+			Notes:        additionalNotes,
+			Cursor:       cursor,
+			IsAdditional: true,
+		}
 	}
 }
 

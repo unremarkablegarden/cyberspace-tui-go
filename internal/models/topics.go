@@ -8,7 +8,9 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -22,13 +24,14 @@ type TopicsModel struct {
 	spinner *spinner.Model
 	err     error
 	client  *api.Client
+	cache   cache.ICache
 	width   int
 	height  int
 	keys    keymaps.AppKeybinds
 	help    help.Model
 }
 
-func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) TopicsModel {
+func NewTopicsModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) TopicsModel {
 	delegate := items.TopicDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -49,6 +52,7 @@ func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.
 	return TopicsModel{
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		keys:    keymap,
@@ -57,7 +61,7 @@ func NewTopicsModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.
 }
 
 func (m TopicsModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchTopics())
+	return tea.Batch(m.spinner.Tick, m.fetchTopics(false))
 }
 
 func (m TopicsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -153,12 +157,42 @@ func (m *TopicsModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m TopicsModel) fetchTopics() tea.Cmd {
+func (m TopicsModel) fetchTopics(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		topics, err := m.client.FetchTopics()
-		if err != nil {
-			return messages.TopicsLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.topicsFromAPI()
 		}
+
+		cacheTopics, found := m.cache.Get(cache.DefaultTopicCacheKey + "topics")
+		if !found {
+			return m.topicsFromAPI()
+		}
+
+		topics, ok := cacheTopics.([]entities.Topic)
+		if !ok {
+			return m.topicsFromAPI()
+		}
+
 		return messages.TopicsLoadedMsg{Topics: topics}
 	}
+}
+
+func (m TopicsModel) topicsFromAPI() tea.Msg {
+	topics, err := m.syncTopicsFromAPI()
+	if err != nil {
+		return messages.TopicsLoadedErrMsg{Err: err}
+	}
+
+	return messages.TopicsLoadedMsg{Topics: topics}
+}
+
+func (m TopicsModel) syncTopicsFromAPI() ([]entities.Topic, error) {
+	topics, err := m.client.FetchTopics()
+	if err != nil {
+		return []entities.Topic{}, err
+	}
+
+	m.cache.Set(cache.DefaultTopicCacheKey+"topics", topics, cache.DefaultExpirationTopics)
+
+	return topics, nil
 }

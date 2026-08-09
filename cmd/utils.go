@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // configPath returns the path to config folder
@@ -52,4 +54,17 @@ func removeConfig(path string, filename string) error {
 	}
 
 	return nil
+}
+
+func quitFilter(m tea.Model, msg tea.Msg) tea.Msg {
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		return msg
+	}
+
+	mainModel := m.(*MainModel)
+
+	mainModel.SaveCache()
+
+	return msg
+
 }

@@ -9,7 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -25,6 +27,7 @@ type FeedModel struct {
 	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
@@ -34,7 +37,7 @@ type FeedModel struct {
 }
 
 // NewFeedModel creates a new feed screen
-func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model) FeedModel {
+func NewFeedModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) FeedModel {
 	// Create list with custom delegate
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -61,6 +64,7 @@ func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Mo
 	return FeedModel{
 		list:    l,
 		client:  client,
+		cache:   cache,
 		spinner: sp,
 		loading: true,
 		hasMore: true,
@@ -70,7 +74,7 @@ func NewFeedModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Mo
 }
 
 func (m FeedModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchPosts())
+	return tea.Batch(m.spinner.Tick, m.fetchPosts(false))
 }
 
 func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -90,7 +94,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
+			return m, tea.Batch(m.spinner.Tick, m.fetchPosts(true))
 		case m.keys.FeedKeybinds.Logout:
 			return m, func() tea.Msg { return messages.LogoutMsg{} }
 		case m.keys.FeedKeybinds.Profile:
@@ -113,11 +117,6 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-
-	case messages.RefreshFeedMsg:
-		m.loading = true
-		m.err = nil
-		return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
 
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionRelease && !m.loading {
@@ -226,22 +225,83 @@ func (m *FeedModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m FeedModel) fetchPosts() tea.Cmd {
+// Network stuff
+
+func (m FeedModel) fetchPosts(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchPosts(30)
-		if err != nil {
-			return messages.FeedErrorMsg{Err: err}
+		if isRefresh {
+			return m.postsFromAPI()
 		}
-		return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor}
+
+		cachedPosts, postsFound := m.cache.Get(cache.DefaultFeedCacheKey + "posts")
+		cachedCursor, cursorFound := m.cache.Get(cache.DefaultFeedCacheKey + "cursor")
+
+		if !postsFound || !cursorFound {
+			return m.postsFromAPI()
+		}
+
+		posts, ok := cachedPosts.([]entities.Post)
+		if !ok {
+			return m.postsFromAPI()
+		}
+
+		cursor, ok := cachedCursor.(string)
+		if !ok {
+			return m.postsFromAPI()
+		}
+
+		return messages.FeedLoadedMsg{
+			Posts:  posts,
+			Cursor: cursor,
+		}
 	}
+}
+
+func (m FeedModel) postsFromAPI() tea.Msg {
+	posts, cursor, err := m.syncPostsFromAPI()
+	if err != nil {
+		return messages.FeedErrorMsg{Err: err}
+	}
+
+	return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor}
 }
 
 func (m FeedModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchMorePosts(30, m.nextCursor)
+		var posts []entities.Post
+
+		if p, found := m.cache.Get(cache.DefaultFeedCacheKey + "posts"); !found {
+			apiPosts, apiCursor, err := m.syncPostsFromAPI()
+			if err != nil {
+				return messages.FeedErrorMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			posts = apiPosts
+		} else {
+			posts = p.([]entities.Post)
+		}
+
+		additionalPosts, cursor, err := m.client.FetchMorePosts(30, m.nextCursor)
 		if err != nil {
 			return messages.FeedErrorMsg{Err: err}
 		}
-		return messages.FeedLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultFeedCacheKey+"posts", append(posts, additionalPosts...), 0)
+		m.cache.Set(cache.DefaultFeedCacheKey+"cursor", cursor, 0)
+
+		return messages.FeedLoadedMsg{Posts: additionalPosts, Cursor: cursor, IsAdditional: true}
 	}
+}
+
+func (m FeedModel) syncPostsFromAPI() ([]entities.Post, string, error) {
+	posts, cursor, err := m.client.FetchPosts(30)
+	if err != nil {
+		return []entities.Post{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultFeedCacheKey+"posts", posts, 0)
+	m.cache.Set(cache.DefaultFeedCacheKey+"cursor", cursor, 0)
+
+	return posts, cursor, nil
 }

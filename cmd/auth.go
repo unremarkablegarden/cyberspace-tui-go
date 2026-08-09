@@ -31,7 +31,7 @@ func (mm *MainModel) loadAuth() {
 	if len(authData) > 0 {
 		var appA appAuth
 		if err := json.Unmarshal(authData, &appA); err != nil {
-			panic(fmt.Sprintf("Error unmarshalling auth json: %s", authDataErr.Error()))
+			panic(fmt.Sprintf("Error unmarshalling auth json: %s", err.Error()))
 		}
 
 		mm.CyberClient.IDToken = appA.IDToken

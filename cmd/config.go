@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
+
+	gocache "github.com/patrickmn/go-cache"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
@@ -12,6 +17,7 @@ import (
 
 const DefaultThemeFilename = "theme.json"
 const DefaultKeybindsFilename = "keybinds.json"
+const DefaultCacheFilename = "cache.gob"
 
 type appConfig struct {
 	Auth       appAuth
@@ -45,7 +51,7 @@ func (mm *MainModel) loadTheme() {
 	if len(themeData) > 0 {
 		var appT appTheme
 		if err := json.Unmarshal(themeData, &appT); err != nil {
-			panic(fmt.Sprintf("Error unmarshalling theme json: %s", themeDataErr.Error()))
+			panic(fmt.Sprintf("Error unmarshalling theme json: %s", err.Error()))
 		}
 
 		mm.Config.Theme = appT
@@ -67,7 +73,7 @@ func (mm *MainModel) loadKeybinds() {
 	var appK keymaps.AppKeybinds
 	if len(keybindsData) > 0 {
 		if err := json.Unmarshal(keybindsData, &appK); err != nil {
-			panic(fmt.Sprintf("Error unmarshalling theme json: %s", keybindsDataErr.Error()))
+			panic(fmt.Sprintf("Error unmarshalling theme json: %s", err.Error()))
 		}
 
 		mm.Config.Keybinds = appK
@@ -76,6 +82,22 @@ func (mm *MainModel) loadKeybinds() {
 
 		mm.SaveKeybindsInfo()
 	}
+}
+
+func (mm *MainModel) loadCache() (map[string]gocache.Item, error) {
+	cacheBytes, err := loadFile(filepath.Join(mm.Config.ConfigPath, DefaultCacheFilename))
+	if err != nil {
+		return nil, err
+	}
+
+	cacheMap := make(map[string]gocache.Item)
+	if len(cacheBytes) > 0 {
+		if err := gob.NewDecoder(bytes.NewReader(cacheBytes)).Decode(&cacheMap); err != nil {
+			return nil, err
+		}
+	}
+
+	return cacheMap, nil
 }
 
 func (mm *MainModel) SaveKeybindsInfo() error {
@@ -90,6 +112,16 @@ func (mm *MainModel) SaveKeybindsInfo() error {
 		DefaultKeybindsFilename,
 	)
 
+}
+
+func (mm *MainModel) SaveCache() error {
+	file, err := os.Create(filepath.Join(mm.Config.ConfigPath, DefaultCacheFilename))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return gob.NewEncoder(file).Encode(mm.CyberCache.Items())
 }
 
 func (mm *MainModel) SaveThemeInfo() error {

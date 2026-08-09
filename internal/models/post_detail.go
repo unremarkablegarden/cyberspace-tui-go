@@ -14,6 +14,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
@@ -34,7 +35,7 @@ type PostDetailModel struct {
 	spinner          *spinner.Model
 	err              error
 	client           *api.Client
-	postID           string
+	cache            cache.ICache
 	currentUsername  string
 	width            int
 	height           int
@@ -58,6 +59,7 @@ type PostDetailModel struct {
 // NewPostDetailModel creates a detail screen with post already loaded
 func NewPostDetailModel(
 	client *api.Client,
+	cache cache.ICache,
 	keymap keymaps.AppKeybinds,
 	sp *spinner.Model,
 	post entities.Post,
@@ -69,7 +71,7 @@ func NewPostDetailModel(
 	vp := newDetailViewport()
 	m := PostDetailModel{
 		client:          client,
-		postID:          post.ID,
+		cache:           cache,
 		post:            post,
 		currentUsername: currentUsername,
 		spinner:         sp,
@@ -87,7 +89,7 @@ func NewPostDetailModel(
 }
 
 func (m PostDetailModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
+	return tea.Batch(m.spinner.Tick, m.fetchPostAndReplies(false))
 }
 
 func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -153,7 +155,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
+			return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies(true))
 
 		case m.keys.PostDetailKeybinds.Delete:
 			if !m.deleting && m.currentUsername != "" && m.post.AuthorUsername == m.currentUsername {
@@ -221,7 +223,7 @@ func (m PostDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeViewport()
 		// Re-fetch to show the new reply
 		m.loading = true
-		return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies())
+		return m, tea.Batch(m.spinner.Tick, m.fetchPostAndReplies(true))
 
 	case messages.PostReplyCreatedErrMsg:
 		m.replySending = false
@@ -489,7 +491,7 @@ func renderReplyNode(node *replyNode, depth int, isLast bool, contentWidth int) 
 
 func (m PostDetailModel) deletePost() tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.DeletePost(m.postID); err != nil {
+		if err := m.client.DeletePost(m.post.ID); err != nil {
 			return messages.PostDeleteErrMsg{Err: err}
 		}
 		return messages.PostDeleteMsg{}
@@ -498,7 +500,7 @@ func (m PostDetailModel) deletePost() tea.Cmd {
 
 func (m PostDetailModel) addBookmark() tea.Cmd {
 	return func() tea.Msg {
-		id, err := m.client.CreateBookmark(m.postID)
+		id, err := m.client.CreateBookmark(m.post.ID)
 		if err != nil {
 			return messages.PostBookmarkAddedErrMsg{Err: err}
 		}
@@ -508,7 +510,7 @@ func (m PostDetailModel) addBookmark() tea.Cmd {
 
 func (m PostDetailModel) sendReply(content string) tea.Cmd {
 	return func() tea.Msg {
-		replyID, err := m.client.CreateReply(m.postID, content)
+		replyID, err := m.client.CreateReply(m.post.ID, content)
 		if err != nil {
 			return messages.PostReplyCreatedErrMsg{Err: err}
 		}
@@ -615,16 +617,45 @@ func renderBox(title, content string, width int) string {
 	return top + "\n" + middle.String() + bottom
 }
 
-func (m PostDetailModel) fetchPostAndReplies() tea.Cmd {
+func (m PostDetailModel) fetchPostAndReplies(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		post := m.post
-		replies, err := m.client.FetchReplies(m.postID)
-		if err != nil {
-			return messages.PostDetailErrorMsg{Err: err}
+		if isRefresh {
+			return m.postAndRepliesFromAPI()
 		}
 
-		return messages.PostDetailLoadedMsg{Post: post, Replies: replies}
+		cachedReplies, found := m.cache.Get(cache.DefaultPostDetailCacheKey + m.post.ID)
+
+		if !found {
+			return m.postAndRepliesFromAPI()
+		}
+
+		replies, ok := cachedReplies.([]entities.Reply)
+		if !ok {
+			return m.postAndRepliesFromAPI()
+		}
+
+		return messages.PostDetailLoadedMsg{Post: m.post, Replies: replies}
 	}
+}
+
+func (m PostDetailModel) postAndRepliesFromAPI() tea.Msg {
+	replies, err := m.syncRepliesFromAPI()
+	if err != nil {
+		return messages.PostDetailErrorMsg{Err: err}
+	}
+
+	return messages.PostDetailLoadedMsg{Post: m.post, Replies: replies}
+}
+
+func (m PostDetailModel) syncRepliesFromAPI() ([]entities.Reply, error) {
+	apiReplies, err := m.client.FetchReplies(m.post.ID)
+	if err != nil {
+		return []entities.Reply{}, err
+	}
+
+	m.cache.Set(cache.DefaultPostDetailCacheKey+m.post.ID, apiReplies, 0)
+
+	return apiReplies, nil
 }
 
 // Composing returns true when the reply textarea is active
