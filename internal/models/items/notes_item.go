@@ -23,39 +23,56 @@ func (n NoteItem) Description() string { return TimeAgo(n.Note.CreatedAt) }
 // NoteDelegate renders note items in the list
 type NoteDelegate struct{}
 
-func (d NoteDelegate) Height() int                               { return 3 }
+func (d NoteDelegate) Height() int                               { return 6 }
 func (d NoteDelegate) Spacing() int                              { return 0 }
 func (d NoteDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 func (d NoteDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	switch it := item.(type) {
 	case NoteItem:
 		isSelected := index == m.Index()
-
-		content := strings.TrimSpace(it.Note.Content)
-		content = strings.ReplaceAll(content, "\n", " ")
-		if len(content) > 72 {
-			content = content[:72] + "…"
-		}
-
-		date := TimeAgo(it.Note.CreatedAt)
-		var meta string
-		if len(it.Note.Topics) > 0 {
-			meta = date + "  [" + strings.Join(it.Note.Topics, "] [") + "]"
-		} else {
-			meta = date
-		}
-
-		var contentLine, metaLine string
-		if isSelected {
-			contentLine = styles.Bright.Render("▸ " + content)
-			metaLine = styles.Dim.Render("  " + meta)
-		} else {
-			contentLine = styles.Normal.Render("  " + content)
-			metaLine = styles.Dim.Render("  " + meta)
-		}
-		fmt.Fprintf(w, "%s\n%s\n", contentLine, metaLine)
+		fmt.Fprint(w, renderNoteCard(it.Note, isSelected, m.Width()))
 
 	case LoadMoreItem:
 		fmt.Fprint(w, zone.Mark("load-more-notes", styles.Dim.Render("  ▼ load more")))
 	}
+}
+func renderNoteCard(n entities.Note, selected bool, width int) string {
+	innerWidth := width - 4
+	if innerWidth < 20 {
+		innerWidth = 76
+	}
+
+	content := strings.TrimSpace(n.Content)
+	content = strings.ReplaceAll(content, "\n", " ")
+	if len(content) > 72 {
+		content = content[:72] + "…"
+	}
+
+	meta := TimeAgo(n.CreatedAt) +
+		"·" +
+		getTagLineString(n.Topics)
+
+	var contentLine, metaLine string
+	if selected {
+		contentLine = styles.Bright.Render("▸ " + content)
+	} else {
+		contentLine = styles.Normal.Render("  " + content)
+	}
+
+	metaLine = styles.Dim.Render("  " + meta)
+
+	var boxContent strings.Builder
+	boxContent.WriteString(contentLine)
+	boxContent.WriteString("\n")
+	boxContent.WriteString(metaLine)
+
+	return BuildCardBox(boxContent.String(), innerWidth, selected)
+}
+
+func NotesToItems(notes []entities.Note) []list.Item {
+	items := make([]list.Item, len(notes))
+	for i, n := range notes {
+		items[i] = NoteItem{Note: n}
+	}
+	return items
 }

@@ -5,16 +5,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -23,14 +25,15 @@ type NotesModel struct {
 	list             list.Model
 	loading          bool
 	loadingMore      bool
-	spinner          spinner.Model
+	spinner          *spinner.Model
 	err              error
 	client           *api.Client
+	cache            cache.ICache
 	nextCursor       string
 	hasMore          bool
 	width            int
 	height           int
-	keys             NotesKeyMap
+	keys             keymaps.AppKeybinds
 	help             help.Model
 	confirmingDelete bool
 	deletingNoteID   string
@@ -38,7 +41,7 @@ type NotesModel struct {
 }
 
 // NewNotesModel creates a new notes list screen
-func NewNotesModel(client *api.Client) NotesModel {
+func NewNotesModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) NotesModel {
 	l := list.New([]list.Item{}, items.NoteDelegate{}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
@@ -58,15 +61,16 @@ func NewNotesModel(client *api.Client) NotesModel {
 	return NotesModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		cache:   cache,
+		spinner: sp,
 		loading: true,
-		keys:    NewNotesKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
 
 func (m NotesModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchNotes())
+	return tea.Batch(m.spinner.Tick, m.fetchNotes(false))
 }
 
 func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -89,32 +93,19 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
-		case key.Matches(msg, m.keys.New):
-			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
-		case key.Matches(msg, m.keys.Edit):
-			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
-				note := ni.Note
-				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
-			}
-		case key.Matches(msg, m.keys.Delete):
-			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
-				m.confirmingDelete = true
-				m.deletingNoteID = ni.Note.ID
-				return m, nil
-			}
-		case key.Matches(msg, m.keys.Open):
+			return m, tea.Batch(m.spinner.Tick, m.fetchNotes(true))
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NoteItem:
 				note := it.Note
@@ -124,6 +115,20 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreNotes())
 				}
+			}
+
+		case m.keys.NotesKeybinds.New:
+			return m, func() tea.Msg { return messages.SwitchToNoteCompose{} }
+		case m.keys.NotesKeybinds.Edit:
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
+				note := ni.Note
+				return m, func() tea.Msg { return messages.SwitchToNoteCompose{Note: note, IsEdit: true} }
+			}
+		case m.keys.NotesKeybinds.Delete:
+			if ni, ok := m.list.SelectedItem().(items.NoteItem); ok {
+				m.confirmingDelete = true
+				m.deletingNoteID = ni.Note.ID
+				return m, nil
 			}
 		}
 
@@ -139,11 +144,6 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
 
 	case messages.NotesLoadedMsg:
 		m.loading = false
@@ -167,7 +167,7 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.NoteDeleteMsg:
 		m.loading = true
-		return m, tea.Batch(m.spinner.Tick, m.fetchNotes())
+		return m, tea.Batch(m.spinner.Tick, m.fetchNotes(true))
 
 	case messages.NoteDeleteErrMsg:
 		m.deleting = false
@@ -191,27 +191,26 @@ func (m NotesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m NotesModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("ACCESSING PRIVATE NOTES",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading notes...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Retrieving encrypted data...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "ACCESSING PRIVATE NOTES",
+				SubtitleText: " Loading notes...",
+				BottomText:   "Retrieving encrypted data...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ PRIVATE NOTES ░▒▓", w))
 
 	noteCount := len(m.list.Items())
 	label := fmt.Sprintf("  %d notes", noteCount)
@@ -222,32 +221,13 @@ func (m NotesModel) View() string {
 
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(ui.RenderFooterWithList(
+		m.help.View(m.keys.NotesHelpKeys()),
+		m.list.Paginator.View(),
+		w,
+	))
 
 	return b.String()
-}
-
-func (m NotesModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
-	helpWidth := lipgloss.Width(helpView)
-
-	var status string
-	if m.confirmingDelete {
-		status = styles.Error.Render(" delete note? [y/n]")
-	} else if m.deleting {
-		status = styles.Dim.Render(" [deleting...]")
-	}
-	statusWidth := lipgloss.Width(status)
-
-	paginatorView := m.list.Paginator.View()
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := width - helpWidth - statusWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
-
-	return helpView + status + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 // SetSize updates the view dimensions
@@ -257,23 +237,84 @@ func (m *NotesModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m NotesModel) fetchNotes() tea.Cmd {
+func (m NotesModel) fetchNotes(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		notes, cursor, err := m.client.FetchNotes(20)
-		if err != nil {
-			return messages.NotesLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.notesFromAPI()
 		}
-		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor}
+
+		cacheNotes, notesFound := m.cache.Get(cache.DefaultNotesCacheKey + "notes")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultNotesCacheKey + "cursor")
+
+		if !notesFound || !cursorFound {
+			return m.notesFromAPI()
+		}
+
+		notes, ok := cacheNotes.([]entities.Note)
+		if !ok {
+			return m.notesFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.notesFromAPI()
+		}
+
+		return messages.NotesLoadedMsg{
+			Notes:  notes,
+			Cursor: cursor,
+		}
 	}
+}
+
+func (m NotesModel) notesFromAPI() tea.Msg {
+	n, c, err := m.syncNotesFromAPI()
+	if err != nil {
+		return messages.NotesLoadedErrMsg{Err: err}
+	}
+	return messages.NotesLoadedMsg{Notes: n, Cursor: c}
+}
+
+func (m NotesModel) syncNotesFromAPI() ([]entities.Note, string, error) {
+	notes, cursor, err := m.client.FetchNotes(20)
+	if err != nil {
+		return []entities.Note{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultNotesCacheKey+"notes", notes, 0)
+	m.cache.Set(cache.DefaultNotesCacheKey+"cursor", cursor, 0)
+
+	return notes, cursor, nil
 }
 
 func (m NotesModel) fetchMoreNotes() tea.Cmd {
 	return func() tea.Msg {
-		notes, cursor, err := m.client.FetchMoreNotes(20, m.nextCursor)
+		var notes []entities.Note
+		if n, found := m.cache.Get(cache.DefaultNotesCacheKey + "notes"); !found {
+			apiNotes, apiCursor, err := m.syncNotesFromAPI()
+			if err != nil {
+				return messages.NotesLoadedErrMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			notes = apiNotes
+		} else {
+			notes = n.([]entities.Note)
+		}
+
+		additionalNotes, cursor, err := m.client.FetchMoreNotes(20, m.nextCursor)
 		if err != nil {
 			return messages.NotesLoadedErrMsg{Err: err}
 		}
-		return messages.NotesLoadedMsg{Notes: notes, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultNotesCacheKey+"notes", append(notes, additionalNotes...), 0)
+		m.cache.Set(cache.DefaultNotesCacheKey+"cursor", cursor, 0)
+
+		return messages.NotesLoadedMsg{
+			Notes:        additionalNotes,
+			Cursor:       cursor,
+			IsAdditional: true,
+		}
 	}
 }
 

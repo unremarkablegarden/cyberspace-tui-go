@@ -4,17 +4,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -24,18 +25,19 @@ type TopicFeedModel struct {
 	list        list.Model
 	loading     bool
 	loadingMore bool
-	spinner     spinner.Model
+	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
 	height      int
-	keys        TopicFeedKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
 }
 
-func NewTopicFeedModel(client *api.Client, topic entities.Topic) TopicFeedModel {
+func NewTopicFeedModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -57,16 +59,17 @@ func NewTopicFeedModel(client *api.Client, topic entities.Topic) TopicFeedModel 
 		topic:   topic,
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		cache:   cache,
+		spinner: sp,
 		loading: true,
 		hasMore: true,
-		keys:    NewTopicFeedKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
 
 func (m TopicFeedModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchPosts())
+	return tea.Batch(m.spinner.Tick, m.fetchPosts(false))
 }
 
 func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -75,29 +78,19 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToTopics{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchPosts())
-		case key.Matches(msg, m.keys.Profile):
-			if item, ok := m.list.SelectedItem().(items.PostItem); ok {
-				username := item.Post.AuthorUsername
-				return m, func() tea.Msg {
-					return messages.SwitchToProfile{
-						Username:    username,
-						BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
-					}
-				}
-			}
-		case key.Matches(msg, m.keys.Open):
+			return m, tea.Batch(m.spinner.Tick, m.fetchPosts(true))
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.PostItem:
 				post := it.Post
@@ -111,6 +104,16 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !m.loadingMore {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
+				}
+			}
+		case m.keys.TopicsFeedKeybinds.Profile:
+			if item, ok := m.list.SelectedItem().(items.PostItem); ok {
+				username := item.Post.AuthorUsername
+				return m, func() tea.Msg {
+					return messages.SwitchToProfile{
+						Username:    username,
+						BackMessage: messages.SwitchToTopicFeed{Topic: m.topic},
+					}
 				}
 			}
 		}
@@ -140,11 +143,6 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
 
 	case messages.TopicPostsLoadedMsg:
 		m.loading = false
@@ -182,45 +180,36 @@ func (m TopicFeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m TopicFeedModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("FILTERING FEED",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading ["+m.topic.Name+"]...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Filtering transmissions by topic...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "FILTERING FEED",
+				SubtitleText: " Loading [" + m.topic.Name + "]...",
+				BottomText:   "Filtering transmissions by topic...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [r] to retry, [esc] to go back")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ ["+m.topic.Name+"] ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.TopicFeedHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
-	_ = h
 	return b.String()
-}
-
-func (m TopicFeedModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
-	paginatorView := m.list.Paginator.View()
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 func (m *TopicFeedModel) SetSize(width, height int) {
@@ -229,22 +218,90 @@ func (m *TopicFeedModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m TopicFeedModel) fetchPosts() tea.Cmd {
+func (m TopicFeedModel) fetchPosts(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchTopicPosts(m.topic.Name, 30)
-		if err != nil {
-			return messages.TopicPostsLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.topicPostsFromAPI()
 		}
-		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor}
+
+		cachePosts, foundPosts := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "posts")
+		cacheCursor, foundCursor := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "cursor")
+
+		if !foundPosts || !foundCursor {
+			return m.topicPostsFromAPI()
+		}
+
+		posts, ok := cachePosts.([]entities.Post)
+		if !ok {
+			return m.topicPostsFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.topicPostsFromAPI()
+		}
+
+		return messages.TopicPostsLoadedMsg{
+			Posts:  posts,
+			Cursor: cursor,
+		}
 	}
+}
+
+func (m TopicFeedModel) topicPostsFromAPI() tea.Msg {
+	p, c, err := m.syncTopicPostsFromAPI()
+	if err != nil {
+		return messages.TopicPostsLoadedErrMsg{Err: err}
+	}
+
+	return messages.TopicPostsLoadedMsg{Posts: p, Cursor: c}
+}
+
+func (m TopicFeedModel) syncTopicPostsFromAPI() ([]entities.Post, string, error) {
+	posts, cursor, err := m.client.FetchTopicPosts(m.topic.Name, 30)
+	if err != nil {
+		return []entities.Post{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultTopicFeedCacheKey+m.topic.Name+"posts", posts, 0)
+	m.cache.Set(cache.DefaultTopicFeedCacheKey+m.topic.Name+"cursor", cursor, 0)
+
+	return posts, cursor, nil
 }
 
 func (m TopicFeedModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchMoreTopicPosts(m.topic.Name, 30, m.nextCursor)
+		var posts []entities.Post
+
+		if p, found := m.cache.Get(cache.DefaultTopicFeedCacheKey + m.topic.Name + "posts"); !found {
+			apiPosts, apiCursor, err := m.syncTopicPostsFromAPI()
+			if err != nil {
+				return messages.TopicPostsLoadedErrMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			posts = apiPosts
+		} else {
+			posts = p.([]entities.Post)
+		}
+
+		additionalPosts, cursor, err := m.client.FetchMoreTopicPosts(m.topic.Name, 30, m.nextCursor)
 		if err != nil {
 			return messages.TopicPostsLoadedErrMsg{Err: err}
 		}
-		return messages.TopicPostsLoadedMsg{Posts: posts, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(
+			cache.DefaultTopicFeedCacheKey+m.topic.Name+"posts",
+			append(posts, additionalPosts...), 0)
+
+		m.cache.Set(
+			cache.DefaultTopicFeedCacheKey+m.topic.Name+"cursor",
+			cursor, 0)
+
+		return messages.TopicPostsLoadedMsg{
+			Posts:        additionalPosts,
+			Cursor:       cursor,
+			IsAdditional: true,
+		}
 	}
 }

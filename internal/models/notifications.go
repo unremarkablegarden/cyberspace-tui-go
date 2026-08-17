@@ -4,15 +4,17 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -21,19 +23,20 @@ type NotificationsModel struct {
 	list        list.Model
 	loading     bool
 	loadingMore bool
-	spinner     spinner.Model
+	spinner     *spinner.Model
 	err         error
 	client      *api.Client
+	cache       cache.ICache
 	nextCursor  string
 	hasMore     bool
 	width       int
 	height      int
-	keys        NotificationsKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewNotificationsModel creates a new notifications screen
-func NewNotificationsModel(client *api.Client) NotificationsModel {
+func NewNotificationsModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) NotificationsModel {
 	delegate := items.NotificationDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -54,16 +57,17 @@ func NewNotificationsModel(client *api.Client) NotificationsModel {
 	return NotificationsModel{
 		list:    l,
 		client:  client,
-		spinner: items.NewSpinner(),
+		cache:   cache,
+		spinner: sp,
 		loading: true,
 		hasMore: true,
-		keys:    NewNotificationsKeyMap(),
+		keys:    keymap,
 		help:    h,
 	}
 }
 
 func (m NotificationsModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchNotifications())
+	return tea.Batch(m.spinner.Tick, m.fetchNotifications(false))
 }
 
 func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -72,21 +76,19 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Quit:
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case m.keys.GlobalKeybinds.Help:
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-		case key.Matches(msg, m.keys.Back):
+		case m.keys.GlobalKeybinds.Back:
 			return m, func() tea.Msg { return messages.SwitchToFeed{} }
-		case key.Matches(msg, m.keys.Refresh):
+		case m.keys.GlobalKeybinds.Refresh:
 			m.loading = true
 			m.err = nil
-			return m, tea.Batch(m.spinner.Tick, m.fetchNotifications())
-		case key.Matches(msg, m.keys.MarkAllRead):
-			return m, m.markAllRead()
-		case key.Matches(msg, m.keys.Open):
+			return m, tea.Batch(m.spinner.Tick, m.fetchNotifications(true))
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.NotificationItem:
 				n := it.Notification
@@ -112,17 +114,14 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(m.spinner.Tick, m.fetchMoreNotifications())
 				}
 			}
+		case m.keys.NotificationsKeybinds.MarkAllRead:
+			return m, m.markAllRead()
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
 
 	case messages.NotificationsLoadedMsg:
 		m.loading = false
@@ -160,70 +159,37 @@ func (m NotificationsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m NotificationsModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		return m.renderLoadingScreen(w, h)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "SCANNING SIGNALS",
+				SubtitleText: " Loading notifications...",
+				BottomText:   "Intercepting incoming transmissions...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		return m.renderErrorScreen(w, h)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(m.renderHeader(w))
+	b.WriteString(ui.RenderHeader("▓▒░ NOTIFICATIONS ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.NotificationsHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
 	_ = h
 	return b.String()
-}
-
-func (m NotificationsModel) renderHeader(width int) string {
-	unread := 0
-	for _, item := range m.list.Items() {
-		if ni, ok := item.(items.NotificationItem); ok && !ni.Notification.Read {
-			unread++
-		}
-	}
-	title := "▓▒░ NOTIFICATIONS ░▒▓"
-	if unread > 0 {
-		title = "▓▒░ NOTIFICATIONS ░▒▓" + styles.Bright.Render(" ["+itoa(unread)+" unread]")
-	}
-	return items.RenderHeader(title, width)
-}
-
-func (m NotificationsModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
-}
-
-func (m NotificationsModel) renderLoadingScreen(width, height int) string {
-	loadingBox := styles.DataBox("SCANNING SIGNALS",
-		"\n"+
-			"  "+m.spinner.View()+styles.Normal.Render(" Loading notifications...")+"\n"+
-			"\n"+
-			"  "+styles.Dim.Render("Intercepting incoming transmissions...")+"\n",
-		50)
-	return items.FullScreen(loadingBox, width, height, lipgloss.Center, lipgloss.Center)
-}
-
-func (m NotificationsModel) renderErrorScreen(width, height int) string {
-	errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-		"\n\n" +
-		styles.Dim.Render("Press [r] to retry, [esc] to go back")
-	return items.FullScreen(errorBox, width, height, lipgloss.Center, lipgloss.Center)
 }
 
 // SetSize updates the view dimensions
@@ -233,24 +199,103 @@ func (m *NotificationsModel) SetSize(width, height int) {
 	m.list.SetSize(width, height-4)
 }
 
-func (m NotificationsModel) fetchNotifications() tea.Cmd {
+func (m NotificationsModel) fetchNotifications(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		notifs, cursor, err := m.client.FetchNotifications(30)
-		if err != nil {
-			return messages.NotificationsErrorMsg{Err: err}
+		if isRefresh {
+			return m.notificationsFromAPI()
 		}
-		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor}
+
+		cacheNoti, notiFound := m.cache.Get(cache.DefaultNotificationCacheKey + "notifications")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultNotificationCacheKey + "cursor")
+
+		if !notiFound || !cursorFound {
+			return m.notificationsFromAPI()
+		}
+
+		notifs, ok := cacheNoti.([]entities.Notification)
+		if !ok {
+			return m.notificationsFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.notificationsFromAPI()
+		}
+
+		return messages.NotificationsLoadedMsg{
+			Notifications: notifs,
+			Cursor:        cursor,
+		}
 	}
 }
 
 func (m NotificationsModel) fetchMoreNotifications() tea.Cmd {
 	return func() tea.Msg {
-		notifs, cursor, err := m.client.FetchMoreNotifications(30, m.nextCursor)
+		var notifs []entities.Notification
+
+		if n, found := m.cache.Get(cache.DefaultNotificationCacheKey + "notifications"); !found {
+			apiNotis, apiCursor, err := m.syncNotificationsFromAPI()
+			if err != nil {
+				return messages.NotificationsErrorMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			notifs = apiNotis
+		} else {
+			notifs = n.([]entities.Notification)
+		}
+
+		additionalNotifs, cursor, err := m.client.FetchMoreNotifications(30, m.nextCursor)
 		if err != nil {
 			return messages.NotificationsErrorMsg{Err: err}
 		}
-		return messages.NotificationsLoadedMsg{Notifications: notifs, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(
+			cache.DefaultNotificationCacheKey+"notifications",
+			append(notifs, additionalNotifs...),
+			cache.DefaultExpirationNotifications,
+		)
+		m.cache.Set(
+			cache.DefaultNotificationCacheKey+"cursor",
+			cursor,
+			cache.DefaultExpirationNotifications,
+		)
+
+		return messages.NotificationsLoadedMsg{
+			Notifications: additionalNotifs,
+			Cursor:        cursor,
+			IsAdditional:  true,
+		}
 	}
+}
+
+func (m NotificationsModel) notificationsFromAPI() tea.Msg {
+	n, c, err := m.syncNotificationsFromAPI()
+	if err != nil {
+		return messages.NotificationsErrorMsg{Err: err}
+	}
+
+	return messages.NotificationsLoadedMsg{Notifications: n, Cursor: c}
+}
+
+func (m NotificationsModel) syncNotificationsFromAPI() ([]entities.Notification, string, error) {
+	notifications, cursor, err := m.client.FetchNotifications(30)
+	if err != nil {
+		return []entities.Notification{}, "", err
+	}
+
+	m.cache.Set(
+		cache.DefaultNotificationCacheKey+"notifications",
+		notifications,
+		cache.DefaultExpirationNotifications,
+	)
+	m.cache.Set(
+		cache.DefaultNotificationCacheKey+"cursor",
+		cursor,
+		cache.DefaultExpirationNotifications,
+	)
+
+	return notifications, cursor, nil
 }
 
 func (m NotificationsModel) markRead(notificationID string) tea.Cmd {
@@ -265,17 +310,4 @@ func (m NotificationsModel) markAllRead() tea.Cmd {
 		_ = m.client.MarkAllNotificationsRead()
 		return nil
 	}
-}
-
-// itoa converts an int to string without importing strconv everywhere
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	result := ""
-	for n > 0 {
-		result = string(rune('0'+n%10)) + result
-		n /= 10
-	}
-	return result
 }

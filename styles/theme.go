@@ -258,10 +258,7 @@ func TitledBox(title, content string, width int) string {
 	for _, line := range lines {
 		styled := contentStyle.Render(line)
 		lineWidth := lipgloss.Width(styled)
-		padding := innerWidth - lineWidth
-		if padding < 0 {
-			padding = 0
-		}
+		padding := max(innerWidth-lineWidth, 0)
 		middle.WriteString(borderStyle.Render("║"))
 		middle.WriteString(styled)
 		middle.WriteString(strings.Repeat(" ", padding))
@@ -305,10 +302,7 @@ func DataBox(title, content string, width int) string {
 	for _, line := range lines {
 		styled := contentStyle.Render(line)
 		lineWidth := lipgloss.Width(styled)
-		padding := innerWidth - lineWidth
-		if padding < 0 {
-			padding = 0
-		}
+		padding := max(innerWidth-lineWidth, 0)
 		middle.WriteString(borderStyle.Render("│"))
 		middle.WriteString(styled)
 		middle.WriteString(strings.Repeat(" ", padding))

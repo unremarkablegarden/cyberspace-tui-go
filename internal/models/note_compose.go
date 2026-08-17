@@ -14,7 +14,8 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -30,13 +31,13 @@ type NoteComposeModel struct {
 	err         error
 	width       int
 	height      int
-	keys        NoteComposeKeyMap
+	keys        keymaps.AppKeybinds
 	help        help.Model
-	spinner     spinner.Model
+	spinner     *spinner.Model
 }
 
 // NewNoteComposeModel creates a note compose/edit screen
-func NewNoteComposeModel(client *api.Client, note entities.Note, isEdit bool) NoteComposeModel {
+func NewNoteComposeModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model, note entities.Note, isEdit bool) NoteComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "Write your note..."
 	ta.SetHeight(10)
@@ -72,9 +73,9 @@ func NewNoteComposeModel(client *api.Client, note entities.Note, isEdit bool) No
 		content:     ta,
 		topicsInput: ti,
 		focused:     "content",
-		keys:        NewNoteComposeKeyMap(),
+		keys:        keymap,
 		help:        h,
-		spinner:     items.NewSpinner(),
+		spinner:     sp,
 	}
 }
 
@@ -88,10 +89,10 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.saving {
 			return m, nil
 		}
-		switch {
-		case msg.String() == "esc":
+		switch msg.String() {
+		case m.keys.NoteComposeKeybinds.Cancel:
 			return m, func() tea.Msg { return messages.SwitchToNotes{} }
-		case msg.String() == "ctrl+s":
+		case m.keys.NoteComposeKeybinds.Save:
 			content := strings.TrimSpace(m.content.Value())
 			if content == "" {
 				return m, nil
@@ -99,7 +100,7 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.saving = true
 			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.saveNote(content, m.parseTopics()))
-		case msg.String() == "tab":
+		case m.keys.NoteComposeKeybinds.SwitchField:
 			if m.focused == "content" {
 				m.focused = "topics"
 				m.content.Blur()
@@ -124,13 +125,6 @@ func (m NoteComposeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.content.SetWidth(msg.Width - 8)
 		m.topicsInput.Width = msg.Width - 20
-
-	case spinner.TickMsg:
-		if m.saving {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
 
 	case messages.NoteComposeSaveMsg:
 		return m, func() tea.Msg { return messages.SwitchToNotes{} }
@@ -188,16 +182,13 @@ func (m NoteComposeModel) saveNote(content string, topics []string) tea.Cmd {
 }
 
 func (m NoteComposeModel) View() string {
-	w, _ := items.SafeDimensions(m.width, m.height)
+	w, _ := ui.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
 	dimStyle := styles.Dim
 
-	innerWidth := w - 6
-	if innerWidth < 40 {
-		innerWidth = 40
-	}
+	innerWidth := max(w-6, 40)
 
 	var b strings.Builder
 
@@ -205,7 +196,7 @@ func (m NoteComposeModel) View() string {
 	if m.isEdit {
 		header = "▓▒░ EDIT NOTE ░▒▓"
 	}
-	b.WriteString(items.RenderHeader(header, w))
+	b.WriteString(ui.RenderHeader(header, w))
 	b.WriteString("\n")
 
 	title := "COMPOSE"
@@ -215,14 +206,11 @@ func (m NoteComposeModel) View() string {
 	if m.saving {
 		title = "SAVING..."
 	}
-	dashesLen := innerWidth - len(title) - 2
-	if dashesLen < 1 {
-		dashesLen = 1
-	}
+	dashesLen := max(innerWidth-len(title)-2, 1)
 	b.WriteString(borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", dashesLen)+"╮"))
 	b.WriteString("\n")
 
-	for _, line := range strings.Split(m.content.View(), "\n") {
+	for line := range strings.SplitSeq(m.content.View(), "\n") {
 		b.WriteString(borderStyle.Render("│ "))
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -254,7 +242,7 @@ func (m NoteComposeModel) View() string {
 
 	b.WriteString(borderStyle.Render("╰" + strings.Repeat("─", innerWidth+2) + "╯"))
 	b.WriteString("\n\n")
-	b.WriteString(m.help.View(m.keys))
+	b.WriteString(m.help.View(m.keys.NoteComposeHelpKeys()))
 
 	return b.String()
 }

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,8 +13,11 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -31,14 +33,15 @@ type ProfileModel struct {
 	list            list.Model
 	loading         bool
 	loadingMore     bool
-	spinner         spinner.Model
+	spinner         *spinner.Model
 	err             error
 	client          *api.Client
+	cache           cache.ICache
 	nextCursor      string
 	hasMore         bool
 	width           int
 	height          int
-	keys            ProfileKeyMap
+	keys            keymaps.AppKeybinds
 	help            help.Model
 	prevMsg         messages.PrevMessage
 	// follow state
@@ -49,7 +52,15 @@ type ProfileModel struct {
 }
 
 // NewProfileModel creates a new profile screen for the given username
-func NewProfileModel(client *api.Client, username, currentUsername string, prevMsg messages.PrevMessage) ProfileModel {
+func NewProfileModel(
+	client *api.Client,
+	cache cache.ICache,
+	keymap keymaps.AppKeybinds,
+	sp *spinner.Model,
+	username,
+	currentUsername string,
+	prevMsg messages.PrevMessage,
+) ProfileModel {
 	delegate := items.PostDelegate{}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -75,16 +86,17 @@ func NewProfileModel(client *api.Client, username, currentUsername string, prevM
 		isOwnProfile:    isOwn,
 		list:            l,
 		client:          client,
-		spinner:         items.NewSpinner(),
+		cache:           cache,
+		spinner:         sp,
 		loading:         true,
-		keys:            NewProfileKeyMap(),
+		keys:            keymap,
 		help:            h,
 		prevMsg:         prevMsg,
 	}
 }
 
 func (m ProfileModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.fetchProfile())
+	return tea.Batch(m.spinner.Tick, m.fetchProfile(false))
 }
 
 func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -93,35 +105,8 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch {
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			return m, nil
-		case key.Matches(msg, m.keys.Back):
-			return m, func() tea.Msg {
-				if m.prevMsg != nil {
-					return m.prevMsg
-				}
-				return messages.SwitchToFeed{}
-			}
-		case key.Matches(msg, m.keys.Refresh):
-			m.loading = true
-			m.err = nil
-			m.followLoaded = false
-			return m, tea.Batch(m.spinner.Tick, m.fetchProfile())
-		case key.Matches(msg, m.keys.Follow):
-			if !m.isOwnProfile && m.followLoaded && !m.followPending {
-				m.followPending = true
-				return m, tea.Batch(m.spinner.Tick, m.toggleFollow())
-			}
-		case key.Matches(msg, m.keys.EditProfile):
-			if m.isOwnProfile {
-				user := m.user
-				return m, func() tea.Msg { return messages.SwitchToEditProfile{User: user} }
-			}
-		case key.Matches(msg, m.keys.Open):
+		switch msg.String() {
+		case m.keys.GlobalKeybinds.Open:
 			switch it := m.list.SelectedItem().(type) {
 			case items.PostItem:
 				post := it.Post
@@ -136,6 +121,33 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loadingMore = true
 					return m, tea.Batch(m.spinner.Tick, m.fetchMorePosts())
 				}
+			}
+		case m.keys.GlobalKeybinds.Quit:
+			return m, tea.Quit
+		case m.keys.GlobalKeybinds.Help:
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+		case m.keys.GlobalKeybinds.Back:
+			return m, func() tea.Msg {
+				if m.prevMsg != nil {
+					return m.prevMsg
+				}
+				return messages.SwitchToFeed{}
+			}
+		case m.keys.GlobalKeybinds.Refresh:
+			m.loading = true
+			m.err = nil
+			m.followLoaded = false
+			return m, tea.Batch(m.spinner.Tick, m.fetchProfile(true))
+		case m.keys.ProfileKeybinds.Follow:
+			if !m.isOwnProfile && m.followLoaded && !m.followPending {
+				m.followPending = true
+				return m, tea.Batch(m.spinner.Tick, m.toggleFollow())
+			}
+		case m.keys.ProfileKeybinds.EditProfile:
+			if m.isOwnProfile {
+				user := m.user
+				return m, func() tea.Msg { return messages.SwitchToEditProfile{User: user} }
 			}
 		}
 
@@ -163,16 +175,8 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		listHeight := msg.Height - profileHeaderHeight - 4
-		if listHeight < 1 {
-			listHeight = 1
-		}
+		listHeight := max(msg.Height-profileHeaderHeight-4, 1)
 		m.list.SetSize(msg.Width, listHeight)
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
 
 	case messages.ProfileLoadedMsg:
 		m.loading = false
@@ -228,41 +232,42 @@ func (m ProfileModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ProfileModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 
 	if m.loading {
-		loadingBox := styles.DataBox("ACCESSING USER DATA",
-			"\n"+
-				"  "+m.spinner.View()+styles.Normal.Render(" Loading @"+m.username+"...")+"\n"+
-				"\n"+
-				"  "+styles.Dim.Render("Retrieving profile data...")+"\n",
-			50)
-		return items.FullScreen(loadingBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderLoadingScreen(
+			ui.LoadingScreenTexts{
+				TitleText:    "ACCESSING USER DATA",
+				SubtitleText: "Loading @" + m.username + "...",
+				BottomText:   "Retrieving profile data...",
+			},
+			*m.spinner,
+			w, h,
+		)
 	}
 
 	if m.err != nil {
-		errorBox := styles.AlertBox(m.err.Error(), "error", 50) +
-			"\n\n" +
-			styles.Dim.Render("Press [esc] to go back, [r] to retry")
-		return items.FullScreen(errorBox, w, h, lipgloss.Center, lipgloss.Center)
+		return ui.RenderErrorScreen(m.err, w, h)
 	}
 
 	var b strings.Builder
-	b.WriteString(items.RenderHeader("▓▒░ PROFILE ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ PROFILE ░▒▓", w))
 	b.WriteString(m.renderProfileInfo(w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter(w))
+	b.WriteString(
+		ui.RenderFooterWithList(
+			m.help.View(m.keys.ProfileHelpKeys()),
+			m.list.Paginator.View(),
+			w,
+		))
 
 	return b.String()
 }
 
 func (m ProfileModel) renderProfileInfo(width int) string {
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorDim)
-	innerWidth := width - 4
-	if innerWidth < 40 {
-		innerWidth = 40
-	}
+	innerWidth := max(width-4, 40)
 
 	var content strings.Builder
 
@@ -327,34 +332,16 @@ func (m ProfileModel) renderProfileInfo(width int) string {
 
 	// Render content lines inside box
 	var mid strings.Builder
-	for _, line := range strings.Split(strings.TrimRight(content.String(), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(content.String(), "\n"), "\n") {
 		wrappedLines := items.WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
 			lineWidth := lipgloss.Width(wl)
-			pad := innerWidth - lineWidth
-			if pad < 0 {
-				pad = 0
-			}
+			pad := max(innerWidth-lineWidth, 0)
 			mid.WriteString(borderStyle.Render("│") + " " + wl + strings.Repeat(" ", pad) + " " + borderStyle.Render("│") + "\n")
 		}
 	}
 
 	return top + "\n" + mid.String()
-}
-
-func (m ProfileModel) renderFooter(width int) string {
-	helpView := m.help.View(m.keys)
-	paginatorView := m.list.Paginator.View()
-
-	helpWidth := lipgloss.Width(helpView)
-	paginatorWidth := lipgloss.Width(paginatorView)
-
-	dividerWidth := width - helpWidth - paginatorWidth - 2
-	if dividerWidth < 1 {
-		dividerWidth = 1
-	}
-
-	return helpView + " " + styles.Divider(dividerWidth) + " " + paginatorView
 }
 
 // Username returns the username this profile is showing
@@ -366,52 +353,160 @@ func (m ProfileModel) Username() string {
 func (m *ProfileModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	listHeight := height - profileHeaderHeight - 4
-	if listHeight < 1 {
-		listHeight = 1
-	}
+	listHeight := max(height-profileHeaderHeight-4, 1)
 	m.list.SetSize(width, listHeight)
 }
 
-func (m ProfileModel) fetchProfile() tea.Cmd {
+func (m ProfileModel) fetchProfile(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
-		user, err := m.client.FetchUser(m.username)
-		if err != nil {
-			return messages.ProfileLoadedErrMsg{Err: err}
+		if isRefresh {
+			return m.profileFromAPI()
 		}
-		posts, cursor, err := m.client.FetchUserPosts(m.username, 20)
-		if err != nil {
-			return messages.ProfileLoadedErrMsg{Err: err}
+
+		cacheUser, userFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "user")
+		cachePosts, postsFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "posts")
+		cacheCursor, cursorFound := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "cursor")
+
+		if !userFound || !postsFound || !cursorFound {
+			return m.profileFromAPI()
 		}
-		return messages.ProfileLoadedMsg{User: *user, Posts: posts, Cursor: cursor}
+
+		user, ok := cacheUser.(entities.User)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		posts, ok := cachePosts.([]entities.Post)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		cursor, ok := cacheCursor.(string)
+		if !ok {
+			return m.profileFromAPI()
+		}
+
+		return messages.ProfileLoadedMsg{
+			User:   user,
+			Posts:  posts,
+			Cursor: cursor,
+		}
+	}
+}
+
+func (m ProfileModel) fetchFollowStatus() tea.Cmd {
+	return func() tea.Msg {
+		cacheFollowID, found := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "followID")
+		if !found {
+			return m.followStatusFromAPI()
+		}
+
+		followID, ok := cacheFollowID.(string)
+		if !ok {
+			return m.followStatusFromAPI()
+		}
+
+		return messages.ProfileFollowMsg{
+			IsFollowing:    followID != "",
+			FollowID:       followID,
+			InitialLoading: true,
+		}
 	}
 }
 
 func (m ProfileModel) fetchMorePosts() tea.Cmd {
 	return func() tea.Msg {
-		posts, cursor, err := m.client.FetchMoreUserPosts(m.username, 20, m.nextCursor)
+		var posts []entities.Post
+
+		if p, found := m.cache.Get(cache.DefaultProfileCacheKey + m.username + "posts"); !found {
+			apiPosts, apiCursor, err := m.syncProfilePostsFromAPI()
+			if err != nil {
+				return messages.FeedErrorMsg{Err: err}
+			}
+
+			m.nextCursor = apiCursor
+			posts = apiPosts
+		} else {
+			posts = p.([]entities.Post)
+		}
+
+		additionalPosts, cursor, err := m.client.FetchMoreUserPosts(m.username, 20, m.nextCursor)
 		if err != nil {
 			return messages.ProfileLoadedErrMsg{Err: err}
 		}
-		return messages.ProfileLoadedMsg{User: m.user, Posts: posts, Cursor: cursor, IsAdditional: true}
+
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"posts", append(posts, additionalPosts...), 0)
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"cursor", cursor, 0)
+
+		return messages.ProfileLoadedMsg{User: m.user, Posts: additionalPosts, Cursor: cursor, IsAdditional: true}
 	}
 }
 
-func (m ProfileModel) fetchFollowStatus() tea.Cmd {
-	userID := m.user.ID
-	return func() tea.Msg {
-		follows, err := m.client.FetchMyFollowing(50)
-		if err != nil {
-			// Non-fatal: just show follow button without status
-			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
-		}
-		for _, f := range follows {
-			if f.FollowedID == userID {
-				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: f.ID, InitialLoading: true}
-			}
-		}
-		return messages.ProfileFollowMsg{IsFollowing: false, FollowID: "", InitialLoading: true}
+func (m ProfileModel) profileFromAPI() tea.Msg {
+	user, err := m.syncProfileUserFromAPI()
+	if err != nil {
+		return messages.ProfileLoadedErrMsg{Err: err}
 	}
+
+	posts, cursor, err := m.syncProfilePostsFromAPI()
+	if err != nil {
+		return messages.ProfileLoadedErrMsg{Err: err}
+	}
+
+	return messages.ProfileLoadedMsg{
+		User:   user,
+		Posts:  posts,
+		Cursor: cursor,
+	}
+}
+
+func (m ProfileModel) followStatusFromAPI() tea.Msg {
+	followID := m.syncProfileFollowStatus()
+
+	return messages.ProfileFollowMsg{IsFollowing: followID != "", FollowID: followID, InitialLoading: true}
+}
+
+func (m ProfileModel) syncProfileFollowStatus() string {
+	follows, err := m.client.FetchMyFollowing(50)
+	// Non-fatal: just show follow button without status
+	if err != nil {
+		return ""
+	}
+
+	followID := ""
+	for _, f := range follows {
+		if f.FollowedID == m.user.ID {
+			followID = f.ID
+			break
+		}
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", followID, 0)
+
+	return followID
+}
+
+func (m ProfileModel) syncProfileUserFromAPI() (entities.User, error) {
+	user, err := m.client.FetchUser(m.username)
+	if err != nil {
+		return entities.User{}, err
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"user", user, 0)
+
+	return user, nil
+}
+
+func (m ProfileModel) syncProfilePostsFromAPI() ([]entities.Post, string, error) {
+	posts, cursor, err := m.client.FetchUserPosts(m.username, 20)
+	if err != nil {
+		return []entities.Post{}, "", err
+	}
+
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"posts", posts, 0)
+	m.cache.Set(cache.DefaultProfileCacheKey+m.username+"cursor", cursor, 0)
+
+	return posts, cursor, nil
 }
 
 func (m ProfileModel) toggleFollow() tea.Cmd {
@@ -421,16 +516,19 @@ func (m ProfileModel) toggleFollow() tea.Cmd {
 			if err := m.client.Unfollow(followID); err != nil {
 				return messages.ProfileFollowMsg{IsFollowing: true, FollowID: followID}
 			}
+
+			m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", "", 0)
 			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
 	}
 
-	userID := m.user.ID
 	return func() tea.Msg {
-		newFollowID, err := m.client.FollowUser(userID)
+		newFollowID, err := m.client.FollowUser(m.user.ID)
 		if err != nil {
 			return messages.ProfileFollowMsg{IsFollowing: false, FollowID: ""}
 		}
+
+		m.cache.Set(cache.DefaultProfileCacheKey+m.username+"followID", newFollowID, 0)
 		return messages.ProfileFollowMsg{IsFollowing: true, FollowID: newFollowID}
 	}
 }

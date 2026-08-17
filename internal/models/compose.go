@@ -14,7 +14,7 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -99,7 +99,7 @@ func NewComposeModel(client *api.Client) ComposeModel {
 		focused:     "content",
 		keys:        NewComposeKeyMap(),
 		help:        h,
-		spinner:     items.NewSpinner(),
+		spinner:     ui.NewSpinner(),
 	}
 }
 
@@ -208,20 +208,16 @@ func (m ComposeModel) sendPost(content string, topics []string) tea.Cmd {
 }
 
 func (m ComposeModel) View() string {
-	w, _ := items.SafeDimensions(m.width, m.height)
+	w, _ := ui.SafeDimensions(m.width, m.height)
 
 	borderStyle := lipgloss.NewStyle().Foreground(styles.ColorBright)
 	titleStyle := lipgloss.NewStyle().Foreground(styles.ColorBright).Bold(true)
 	dimStyle := styles.Dim
 
-	innerWidth := w - 6
-	if innerWidth < 40 {
-		innerWidth = 40
-	}
+	innerWidth := max(w-6, 40)
 
 	var b strings.Builder
-
-	b.WriteString(items.RenderHeader("▓▒░ NEW POST ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ NEW POST ░▒▓", w))
 	b.WriteString("\n")
 
 	// Box title
@@ -229,15 +225,14 @@ func (m ComposeModel) View() string {
 	if m.sending {
 		title = "TRANSMITTING..."
 	}
-	dashesLen := innerWidth - len(title) - 2
-	if dashesLen < 1 {
-		dashesLen = 1
-	}
+
+	dashesLen := max(innerWidth-len(title)-2, 1)
+
 	b.WriteString(borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", dashesLen)+"╮"))
 	b.WriteString("\n")
 
 	// Content textarea
-	for _, line := range strings.Split(m.content.View(), "\n") {
+	for line := range strings.SplitSeq(m.content.View(), "\n") {
 		b.WriteString(borderStyle.Render("│ "))
 		b.WriteString(line)
 		b.WriteString("\n")

@@ -1,22 +1,29 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/entities"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 )
 
 type MainModel struct {
 	ActiveModel tea.Model
 	CyberClient *api.Client
+	CyberCache  cache.ICache
 	Config      appConfig
+	Spinner     spinner.Model
 }
 
 func (mm *MainModel) Init() tea.Cmd {
@@ -30,6 +37,10 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return mm, tea.Quit
+		case tea.KeyCtrlK:
+			menuModel := models.NewMenuModel(mm.Config.Keybinds)
+			mm.ActiveModel = menuModel
+			return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 		default:
 			updatedModel, command := mm.ActiveModel.Update(msg)
 			mm.ActiveModel = updatedModel
@@ -77,65 +88,76 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return mm, tea.Quit
 
+	// Elements
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		mm.Spinner, cmd = mm.Spinner.Update(msg)
+		return mm, cmd
+
 		// Switch models stuff
 	case messages.SwitchToPostDetail:
 		postDetailModel := models.NewPostDetailModel(
 			mm.CyberClient,
+			mm.CyberCache,
+			mm.Config.Keybinds,
+			&mm.Spinner,
 			msg.Post,
-			"",
+			"", // This is to represent other profile than own profile
 			msg.BackMessage,
 		)
 		mm.ActiveModel = postDetailModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToProfile:
 		profileModel := models.NewProfileModel(
 			mm.CyberClient,
+			mm.CyberCache,
+			mm.Config.Keybinds,
+			&mm.Spinner,
 			msg.Username,
 			mm.Config.Auth.Username,
 			msg.BackMessage,
 		)
 		mm.ActiveModel = profileModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
+	case messages.SwitchToOwnProfile:
+		profileModel := models.NewProfileModel(
+			mm.CyberClient,
+			mm.CyberCache,
+			mm.Config.Keybinds,
+			&mm.Spinner,
+			mm.Config.Auth.Username,
+			mm.Config.Auth.Username,
+			nil,
+		)
+		mm.ActiveModel = profileModel
 	case messages.SwitchToFeed:
-		feedModel := models.NewFeedModel(mm.CyberClient)
+		feedModel := models.NewFeedModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = feedModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotifications:
-		notificationsModel := models.NewNotificationsModel(mm.CyberClient)
+		notificationsModel := models.NewNotificationsModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = notificationsModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToBookmarks:
-		bookmarksModel := models.NewBookmarksModel(mm.CyberClient)
+		bookmarksModel := models.NewBookmarksModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = bookmarksModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopics:
-		topicsModel := models.NewTopicsModel(mm.CyberClient)
+		topicsModel := models.NewTopicsModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = topicsModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToTopicFeed:
-		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, msg.Topic)
+		topicFeedModel := models.NewTopicFeedModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner, msg.Topic)
 		mm.ActiveModel = topicFeedModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToCompose:
 		composeModel := models.NewComposeModel(mm.CyberClient)
 		mm.ActiveModel = composeModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToEditProfile:
 		editProfileModel := models.NewEditProfileModel(mm.CyberClient, msg.User)
 		mm.ActiveModel = editProfileModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNotes:
-		notesModel := models.NewNotesModel(mm.CyberClient)
+		notesModel := models.NewNotesModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 		mm.ActiveModel = notesModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToNoteCompose:
-		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, msg.Note, msg.IsEdit)
+		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner, msg.Note, msg.IsEdit)
 		mm.ActiveModel = noteComposeModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 	case messages.SwitchToThemeSwitcher:
-		themeSwitcherModel := models.NewThemeSwitcherModel()
+		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)
 		mm.ActiveModel = themeSwitcherModel
-		return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 
 		// Send message to active model to handle it there
 	default:
@@ -143,6 +165,8 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.ActiveModel = updatedModel
 		return mm, command
 	}
+
+	return mm, tea.Batch(tea.WindowSize(), mm.ActiveModel.Init())
 }
 
 func (mm *MainModel) View() string {
@@ -150,7 +174,9 @@ func (mm *MainModel) View() string {
 }
 
 func NewMainModel() *MainModel {
-	mm := &MainModel{}
+	mm := &MainModel{
+		Spinner: ui.NewSpinner(),
+	}
 
 	// 1. Load config
 	mm.loadConfig()
@@ -158,15 +184,18 @@ func NewMainModel() *MainModel {
 	// 2. Load Theme
 	mm.loadTheme()
 
-	// 2. Load dependencies (client)
+	// 3. Load Keybinds
+	mm.loadKeybinds()
+
+	// 4. Load dependencies
 	mm.loadDependencies()
 
-	// 3. Load Auth
+	// 5. Load Auth
 	mm.loadAuth()
 
-	// 4. Init whatever (login/feed)
+	// 6. Init whatever (login/feed)
 	if mm.Config.Auth.IDToken != "" && !mm.Config.Auth.IsExpired() {
-		mm.ActiveModel = models.NewFeedModel(mm.CyberClient)
+		mm.ActiveModel = models.NewFeedModel(mm.CyberClient, mm.CyberCache, mm.Config.Keybinds, &mm.Spinner)
 	} else {
 		mm.ActiveModel = models.NewLoginModel(mm.CyberClient)
 	}
@@ -175,6 +204,15 @@ func NewMainModel() *MainModel {
 }
 
 func main() {
+	// gob registers for cache save
+	gob.Register([]entities.Post{})
+	gob.Register([]entities.Reply{})
+	gob.Register(entities.User{})
+	gob.Register([]entities.Bookmark{})
+	gob.Register([]entities.Note{})
+	gob.Register([]entities.Notification{})
+	gob.Register([]entities.Topic{})
+
 	// Load .env file (optional - won't fail if missing)
 	godotenv.Load()
 
@@ -189,6 +227,7 @@ func main() {
 		mm,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		tea.WithFilter(quitFilter),
 	)
 
 	if _, err := p.Run(); err != nil {

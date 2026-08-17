@@ -46,20 +46,20 @@ func (c *Client) UpdateProfile(req UpdateProfileRequest) error {
 }
 
 // FetchUser retrieves a user's profile by username
-func (c *Client) FetchUser(username string) (*entities.User, error) {
+func (c *Client) FetchUser(username string) (entities.User, error) {
 	reqURL := fmt.Sprintf("%s/v1/users/%s", c.BaseURL, url.PathEscape(username))
 
 	body, err := c.doGet(reqURL)
 	if err != nil {
-		return nil, err
+		return entities.User{}, err
 	}
 
 	var resp userResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, err
+		return entities.User{}, err
 	}
 
-	return &resp.Data, nil
+	return resp.Data, nil
 }
 
 // FetchUserPosts retrieves posts by a specific user

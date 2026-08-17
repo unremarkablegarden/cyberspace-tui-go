@@ -14,15 +14,22 @@ Stuff found while working on the code
 - [X] Some list paginated events uses similar logic, maybe a generic function can help with that
 - [X] Move *_items to be more clear
 - [X] Only first pagination is working
+- [X] Update config to support keybindings
+- [X] Menu for easy navigation
+- [X] Show help info for keybinds
+- [X] Re do bookmark removal logic to simplify it (can be done similar to how notes works right now)
+- [X] With current changes, each screen change triggers a new request (local cache?)
 
 ## Stuff to fix
-- [ ] With current changes, each screen change triggers a new request (local cache?)
 - [ ] When a post is saved in the post detail view, there is no "unsave" functionality
-- [ ] Update help keys
 - [ ] Note composer "IsEdit" flag works only to edit a note, if "IsEdit" is false, falls back to "new note" instead of open a note in read mode or something
 
 
 ## Stuff to do
-- [ ] Menu for easy navigation
 - [ ] Support images in terminals that support _TGP_
 - [ ] Expand button in feed screen
+- [ ] Settings should wrap theme and friendly keymaps remap
+- [ ] Support for custom footer messages
+- [ ] Re do a lot of stuff in post detail to simplify
+- [ ] Reply only works for main post, no other comments
+- [ ] Fix same size for all items in feeds to maintain same view when scrolling

@@ -1,6 +1,6 @@
 module github.com/unremarkablegarden/cyberspace-tui-go
 
-go 1.25.4
+go 1.26.5
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0
@@ -9,6 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lrstanley/bubblezone v1.0.0
 	github.com/mattn/go-runewidth v0.0.16
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 )
 
 require (

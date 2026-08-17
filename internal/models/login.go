@@ -11,7 +11,8 @@ import (
 
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/api"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
-	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/keymaps"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
@@ -25,7 +26,7 @@ type LoginModel struct {
 	client        *api.Client
 	width         int
 	height        int
-	keys          LoginKeyMap
+	keys          keymaps.LoginKeyMap
 	help          help.Model
 }
 
@@ -55,7 +56,7 @@ func NewLoginModel(client *api.Client) LoginModel {
 		passwordInput: pi,
 		focusIndex:    0,
 		client:        client,
-		keys:          NewLoginKeyMap(),
+		keys:          keymaps.NewLoginKeyMap(),
 		help:          h,
 	}
 }
@@ -124,7 +125,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m LoginModel) View() string {
-	w, h := items.SafeDimensions(m.width, m.height)
+	w, h := ui.SafeDimensions(m.width, m.height)
 	var b strings.Builder
 
 	// Top scan line effect
@@ -184,10 +185,7 @@ func (m LoginModel) View() string {
 	form.WriteString("\n")
 
 	// Wrap in titled box
-	boxWidth := 60
-	if w < 65 {
-		boxWidth = w - 6
-	}
+	boxWidth := min(60, w-6)
 	box := styles.TitledBox("SECURE LOGIN TERMINAL", form.String(), boxWidth)
 
 	// Center the box
@@ -212,13 +210,10 @@ func (m LoginModel) View() string {
 	// Calculate vertical centering
 	content := b.String()
 	contentLines := strings.Count(content, "\n") + 1
-	topPad := (h - contentLines - 1) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
+	topPad := max((h-contentLines-1)/2, 0)
 
 	var result strings.Builder
-	for i := 0; i < topPad; i++ {
+	for range topPad {
 		result.WriteString("\n")
 	}
 	result.WriteString(content)
