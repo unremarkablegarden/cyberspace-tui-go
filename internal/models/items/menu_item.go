@@ -45,24 +45,26 @@ func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if !ok {
 		return
 	}
+
 	selected := index == m.Index()
 	width := m.Width()
+	height := d.Height()
+
 	kbSlice := it.Keybind.Keys()
 	kb := "N/A"
 	if len(kbSlice) > 0 {
 		kb = kbSlice[0]
 	}
-	fmt.Fprint(w, renderMenuItem(it.Name, kb, selected, width))
+
+	fmt.Fprint(w, renderMenuItem(it.Name, kb, width, height, selected))
 }
 
-func renderMenuItem(name string, keybind string, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+func renderMenuItem(name string, keybind string, width int, height int, selected bool) string {
+	innerWidth := max(width-4, 76)
+	innerHeight := max(height-2, 1)
 
 	tag := "[" + keybind + "]" + " " + name
 
 	line := styles.Bright.Render(tag)
-	return BuildCardBox(line, innerWidth, 1, selected)
+	return BuildCardBox(line, innerWidth, innerHeight, selected)
 }
