@@ -30,17 +30,15 @@ func (d NoteDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	switch it := item.(type) {
 	case NoteItem:
 		isSelected := index == m.Index()
-		fmt.Fprint(w, renderNoteCard(it.Note, isSelected, m.Width()))
+		fmt.Fprint(w, renderNoteCard(it.Note, m.Width(), d.Height(), isSelected))
 
 	case LoadMoreItem:
 		fmt.Fprint(w, zone.Mark("load-more-notes", styles.Dim.Render("  ▼ load more")))
 	}
 }
-func renderNoteCard(n entities.Note, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+func renderNoteCard(n entities.Note, width int, height int, selected bool) string {
+	innerWidth := max(width-4, 76)
+	innerHeight := max(height-2, 1)
 
 	content := strings.TrimSpace(n.Content)
 	content = strings.ReplaceAll(content, "\n", " ")
@@ -66,7 +64,7 @@ func renderNoteCard(n entities.Note, selected bool, width int) string {
 	boxContent.WriteString("\n")
 	boxContent.WriteString(metaLine)
 
-	return BuildCardBox(boxContent.String(), innerWidth, 4, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, innerHeight, selected)
 }
 
 func NotesToItems(notes []entities.Note) []list.Item {
