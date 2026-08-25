@@ -213,57 +213,95 @@ func ReplaceEmojis(s string) string {
 
 // BuildCardBox renders content in a bordered card with rounded corners.
 func BuildCardBox(content string, width int, height int, selected bool) string {
-	var borderColor lipgloss.Color
+	borderColor := styles.ColorDim
 	if selected {
 		borderColor = styles.ColorBright
-	} else {
-		borderColor = styles.ColorDim
 	}
 
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 	contentStyle := lipgloss.NewStyle().Foreground(styles.ColorNormal)
 
-	// Rounded corners
-	top := borderStyle.Render("╭" + strings.Repeat("─", width) + "╮")
-	bottom := borderStyle.Render("╰" + strings.Repeat("─", width) + "╯")
-
 	innerWidth := width - 2
 
 	lines := strings.Split(content, "\n")
-	var middle strings.Builder
+	boxContent := make([]string, 0, len(lines))
+
+	var sBuilder strings.Builder
 	totalLines := 0
 
 	for _, line := range lines {
 		if totalLines >= height {
 			break
 		}
+
 		wrappedLines := WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
 			if totalLines >= height {
 				break
 			}
+
 			styled := contentStyle.Render(wl)
 			lineWidth := lipgloss.Width(styled)
 			pad := max(innerWidth-lineWidth, 0)
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString(" ")
-			middle.WriteString(styled)
-			middle.WriteString(strings.Repeat(" ", pad))
-			middle.WriteString(" ")
-			middle.WriteString(borderStyle.Render("│"))
-			middle.WriteString("\n")
+
+			boxContent = append(
+				boxContent,
+				fmt.Sprintf(
+					"%s%s",
+					styled, strings.Repeat(" ", pad),
+				),
+			)
+
 			totalLines++
 		}
 	}
 
-	for range height - totalLines {
-		middle.WriteString(borderStyle.Render("│"))
-		middle.WriteString(strings.Repeat(" ", width))
-		middle.WriteString(borderStyle.Render("│"))
-		middle.WriteString("\n")
+	return renderBox(
+		sBuilder,
+		borderStyle,
+		boxContent,
+		totalLines,
+		width, height)
+}
+
+func renderBox(
+	builder strings.Builder,
+	borderStyle lipgloss.Style,
+	content []string,
+	totalLines int,
+	width, height int,
+) string {
+	// Rounded corners
+	top := borderStyle.Render("╭" + strings.Repeat("─", width) + "╮")
+	bottom := borderStyle.Render("╰" + strings.Repeat("─", width) + "╯")
+
+	missingPadding := height - totalLines
+	heightPadding := missingPadding / 2
+
+	for range heightPadding {
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString(strings.Repeat(" ", width))
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString("\n")
 	}
 
-	return top + "\n" + middle.String() + bottom
+	for _, line := range content {
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString(" ")
+		builder.WriteString(line)
+		builder.WriteString(" ")
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString("\n")
+	}
+
+	for range missingPadding - heightPadding {
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString(strings.Repeat(" ", width))
+		builder.WriteString(borderStyle.Render("│"))
+		builder.WriteString("\n")
+	}
+
+	return top + "\n" + builder.String() + bottom
 }
 
 // BuildListItems updates lists when added
