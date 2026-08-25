@@ -246,11 +246,3 @@ func (m NoteComposeModel) View() string {
 
 	return b.String()
 }
-
-// SetSize updates the view dimensions
-func (m *NoteComposeModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.content.SetWidth(width - 8)
-	m.topicsInput.Width = width - 20
-}

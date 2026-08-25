@@ -349,14 +349,6 @@ func (m ProfileModel) Username() string {
 	return m.username
 }
 
-// SetSize updates the view dimensions
-func (m *ProfileModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	listHeight := max(height-profileHeaderHeight-4, 1)
-	m.list.SetSize(width, listHeight)
-}
-
 func (m ProfileModel) fetchProfile(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		if isRefresh {

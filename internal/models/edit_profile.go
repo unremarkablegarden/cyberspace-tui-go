@@ -237,12 +237,3 @@ func (m EditProfileModel) View() string {
 
 	return b.String()
 }
-
-// SetSize updates the view dimensions
-func (m *EditProfileModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	for i := range m.fields {
-		m.fields[i].Width = width - 20
-	}
-}

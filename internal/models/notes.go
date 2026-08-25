@@ -230,13 +230,6 @@ func (m NotesModel) View() string {
 	return b.String()
 }
 
-// SetSize updates the view dimensions
-func (m *NotesModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.list.SetSize(width, height-4)
-}
-
 func (m NotesModel) fetchNotes(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		if isRefresh {

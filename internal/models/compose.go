@@ -274,11 +274,3 @@ func (m ComposeModel) View() string {
 
 	return b.String()
 }
-
-// SetSize updates the view dimensions
-func (m *ComposeModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.content.SetWidth(width - 8)
-	m.topicsInput.Width = width - 20
-}

@@ -213,13 +213,6 @@ func (m BookmarksModel) View() string {
 	return b.String()
 }
 
-// SetSize updates the view dimensions
-func (m *BookmarksModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.list.SetSize(width, height-4)
-}
-
 func (m BookmarksModel) fetchBookmarks(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		if isRefresh {

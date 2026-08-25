@@ -192,13 +192,6 @@ func (m NotificationsModel) View() string {
 	return b.String()
 }
 
-// SetSize updates the view dimensions
-func (m *NotificationsModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.list.SetSize(width, height-4)
-}
-
 func (m NotificationsModel) fetchNotifications(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		if isRefresh {

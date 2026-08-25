@@ -151,12 +151,6 @@ func (m TopicsModel) View() string {
 	return b.String()
 }
 
-func (m *TopicsModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.list.SetSize(width, height-4)
-}
-
 func (m TopicsModel) fetchTopics(isRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		if isRefresh {

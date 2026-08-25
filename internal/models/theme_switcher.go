@@ -152,9 +152,3 @@ func (m *ThemeSwitcherModel) previewTheme() {
 		m.help.Styles = styles.HelpStyles()
 	}
 }
-
-// SetSize updates the view dimensions
-func (m *ThemeSwitcherModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-}

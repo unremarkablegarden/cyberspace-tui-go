@@ -661,16 +661,6 @@ func (m PostDetailModel) syncRepliesFromAPI() ([]entities.Reply, error) {
 // Composing returns true when the reply textarea is active
 func (m PostDetailModel) Composing() bool { return m.composing }
 
-// SetSize updates the view dimensions
-func (m *PostDetailModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	vpHeight := max(height-headerHeight-footerHeight-hintHeight, 1)
-	m.viewport.Width = width
-	m.viewport.Height = vpHeight
-	m.ready = true
-}
-
 func newReplyTextarea() textarea.Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your reply..."

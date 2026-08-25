@@ -228,12 +228,6 @@ func (m LoginModel) View() string {
 	return result.String()
 }
 
-// SetSize updates the view dimensions
-func (m *LoginModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-}
-
 func (m *LoginModel) fetchOwnUsername() tea.Msg {
 	user, userErr := m.client.FetchOwnProfile()
 	if userErr != nil {
