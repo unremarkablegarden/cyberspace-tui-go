@@ -23,6 +23,7 @@ Stuff found while working on the code
 ## Stuff to fix
 - [ ] When a post is saved in the post detail view, there is no "unsave" functionality
 - [ ] Note composer "IsEdit" flag works only to edit a note, if "IsEdit" is false, falls back to "new note" instead of open a note in read mode or something
+- [ ] When opening post details, the spinner does not spin for replies loading
 
 
 ## Stuff to do

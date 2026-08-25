@@ -39,10 +39,11 @@ func (d BookmarkDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil 
 func (d BookmarkDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	selected := index == m.Index()
 	width := m.Width()
+	height := d.Height()
 
 	switch it := item.(type) {
 	case BookmarkItem:
-		card := renderPostCard(&it.Bookmark.Post, &it.Bookmark, selected, width)
+		card := renderPostCard(&it.Bookmark.Post, &it.Bookmark, width, height, selected)
 		fmt.Fprint(w, zone.Mark(it.Bookmark.Post.ID, card))
 	case LoadMoreItem:
 		card := renderLoadMoreCard(selected, width)

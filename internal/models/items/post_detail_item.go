@@ -47,10 +47,11 @@ func (d PostDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d PostDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	selected := index == m.Index()
 	width := m.Width()
+	height := d.Height()
 
 	switch it := item.(type) {
 	case PostItem:
-		card := renderPostCard(&it.Post, nil, selected, width)
+		card := renderPostCard(&it.Post, nil, width, height, selected)
 		fmt.Fprint(w, zone.Mark(it.Post.ID, card))
 	case LoadMoreItem:
 		card := renderLoadMoreCard(selected, width)
@@ -62,11 +63,15 @@ func (d PostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 // CARD RENDERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+func renderPostCard(
+	p *entities.Post,
+	b *entities.Bookmark,
+	width int,
+	height int,
+	selected bool,
+) string {
+	innerWidth := max(width-4, 76)
+	innerHeight := max(height-2, 1)
 
 	// Username on left, time + stats on right
 	username := "@" + p.AuthorUsername
@@ -93,7 +98,7 @@ func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width
 		boxContent.WriteString(tagsLine)
 	}
 
-	return BuildCardBox(boxContent.String(), innerWidth, 5, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, innerHeight, selected)
 }
 
 func getPostStatsString(post *entities.Post, bookmark *entities.Bookmark) string {
@@ -113,11 +118,11 @@ func getPostStatsString(post *entities.Post, bookmark *entities.Bookmark) string
 	if post.BookmarksCount == 1 {
 		saveWord = "save"
 	}
+
 	return fmt.Sprintf("%d %s · %d %s · %s",
 		post.RepliesCount, replyWord,
 		post.BookmarksCount, saveWord,
 		TimeAgo(post.CreatedAt))
-
 }
 
 func getTagLineString(topics []string) string {
