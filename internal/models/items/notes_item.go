@@ -66,7 +66,7 @@ func renderNoteCard(n entities.Note, selected bool, width int) string {
 	boxContent.WriteString("\n")
 	boxContent.WriteString(metaLine)
 
-	return BuildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, 4, selected)
 }
 
 func NotesToItems(notes []entities.Note) []list.Item {

@@ -33,14 +33,13 @@ func (d TopicDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	}
 	selected := index == m.Index()
 	width := m.Width()
-	fmt.Fprint(w, renderTopicCard(it.Topic, selected, width))
+	height := d.Height()
+	fmt.Fprint(w, renderTopicCard(it.Topic, width, height, selected))
 }
 
-func renderTopicCard(t entities.Topic, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+func renderTopicCard(t entities.Topic, width int, height int, selected bool) string {
+	innerWidth := max(width-4, 76)
+	innerHeight := max(height-2, 1)
 
 	tag := "[" + t.Name + "]"
 	count := fmt.Sprintf("%d posts", t.PostCount)
@@ -48,5 +47,5 @@ func renderTopicCard(t entities.Topic, selected bool, width int) string {
 	spacing := max(innerWidth-len(tag)-len(count), 1)
 
 	line := styles.Bright.Render(tag) + strings.Repeat(" ", spacing) + styles.Dim.Render(count)
-	return BuildCardBox(line, innerWidth, selected)
+	return BuildCardBox(line, innerWidth, innerHeight, selected)
 }

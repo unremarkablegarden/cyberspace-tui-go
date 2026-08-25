@@ -218,13 +218,6 @@ func (m FeedModel) View() string {
 	return b.String()
 }
 
-// SetSize updates the view dimensions
-func (m *FeedModel) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-	m.list.SetSize(width, height-4)
-}
-
 // Network stuff
 
 func (m FeedModel) fetchPosts(isRefresh bool) tea.Cmd {

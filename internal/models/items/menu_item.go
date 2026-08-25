@@ -64,5 +64,5 @@ func renderMenuItem(name string, keybind string, selected bool, width int) strin
 	tag := "[" + keybind + "]" + " " + name
 
 	line := styles.Bright.Render(tag)
-	return BuildCardBox(line, innerWidth, selected)
+	return BuildCardBox(line, innerWidth, 1, selected)
 }

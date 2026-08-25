@@ -86,19 +86,23 @@ func WrapText(text string, width int) []string {
 		return []string{""}
 	}
 
-	currentLine := words[0]
-	currentWidth := lipgloss.Width(currentLine)
-	for _, word := range words[1:] {
+	var currentLine string
+	var currentWidth int
+
+	for _, word := range words {
 		wordWidth := lipgloss.Width(word)
+
 		if currentWidth+1+wordWidth <= width {
 			currentLine += " " + word
 			currentWidth += 1 + wordWidth
-		} else {
-			lines = append(lines, currentLine)
-			currentLine = word
-			currentWidth = wordWidth
+			continue
 		}
+
+		lines = append(lines, currentLine)
+		currentLine = word
+		currentWidth = wordWidth
 	}
+
 	lines = append(lines, currentLine)
 
 	return lines
@@ -212,7 +216,7 @@ func ReplaceEmojis(s string) string {
 }
 
 // BuildCardBox renders content in a bordered card with rounded corners.
-func BuildCardBox(content string, width int, selected bool) string {
+func BuildCardBox(content string, width int, height int, selected bool) string {
 	var borderColor lipgloss.Color
 	if selected {
 		borderColor = styles.ColorBright
@@ -234,12 +238,12 @@ func BuildCardBox(content string, width int, selected bool) string {
 	totalLines := 0
 
 	for _, line := range lines {
-		if totalLines >= DefaultMaxCardBoxLines {
+		if totalLines >= height {
 			break
 		}
 		wrappedLines := WrapText(line, innerWidth)
 		for _, wl := range wrappedLines {
-			if totalLines >= DefaultMaxCardBoxLines {
+			if totalLines >= height {
 				break
 			}
 			styled := contentStyle.Render(wl)
@@ -254,6 +258,13 @@ func BuildCardBox(content string, width int, selected bool) string {
 			middle.WriteString("\n")
 			totalLines++
 		}
+	}
+
+	for range height - totalLines {
+		middle.WriteString(borderStyle.Render("│"))
+		middle.WriteString(strings.Repeat(" ", width))
+		middle.WriteString(borderStyle.Render("│"))
+		middle.WriteString("\n")
 	}
 
 	return top + "\n" + middle.String() + bottom

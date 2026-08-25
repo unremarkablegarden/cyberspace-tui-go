@@ -93,7 +93,7 @@ func renderPostCard(p *entities.Post, b *entities.Bookmark, selected bool, width
 		boxContent.WriteString(tagsLine)
 	}
 
-	return BuildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, 5, selected)
 }
 
 func getPostStatsString(post *entities.Post, bookmark *entities.Bookmark) string {

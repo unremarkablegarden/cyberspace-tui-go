@@ -79,7 +79,7 @@ func renderNotificationCard(n entities.Notification, selected bool, width int) s
 		boxContent.WriteString(styles.Dim.Render("  → open post  [enter]"))
 	}
 
-	return BuildCardBox(boxContent.String(), innerWidth, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, 2, selected)
 }
 
 func notificationSummary(n entities.Notification) string {

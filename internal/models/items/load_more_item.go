@@ -28,5 +28,5 @@ func renderLoadMoreCard(selected bool, width int) string {
 	padding := max((innerWidth-contentWidth)/2, 0)
 	centeredContent := strings.Repeat(" ", padding) + content
 
-	return BuildCardBox(centeredContent, innerWidth, selected)
+	return BuildCardBox(centeredContent, innerWidth, 1, selected)
 }
