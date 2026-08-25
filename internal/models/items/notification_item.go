@@ -41,20 +41,19 @@ func (d NotificationDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return 
 func (d NotificationDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	selected := index == m.Index()
 	width := m.Width()
+	height := d.Height()
 
 	switch it := item.(type) {
 	case NotificationItem:
-		fmt.Fprint(w, renderNotificationCard(it.Notification, selected, width))
+		fmt.Fprint(w, renderNotificationCard(it.Notification, width, height, selected))
 	case LoadMoreItem:
 		fmt.Fprint(w, renderLoadMoreCard(selected, width))
 	}
 }
 
-func renderNotificationCard(n entities.Notification, selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+func renderNotificationCard(n entities.Notification, width int, height int, selected bool) string {
+	innerWidth := max(width-4, 76)
+	innerHeight := max(height-2, 1)
 
 	unreadMark := "  "
 	if !n.Read {
@@ -79,7 +78,7 @@ func renderNotificationCard(n entities.Notification, selected bool, width int) s
 		boxContent.WriteString(styles.Dim.Render("  → open post  [enter]"))
 	}
 
-	return BuildCardBox(boxContent.String(), innerWidth, 2, selected)
+	return BuildCardBox(boxContent.String(), innerWidth, innerHeight, selected)
 }
 
 func notificationSummary(n entities.Notification) string {
