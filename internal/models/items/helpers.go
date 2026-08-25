@@ -14,10 +14,6 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/styles"
 )
 
-const (
-	DefaultMaxCardBoxLines = 5
-)
-
 var (
 	reLink        = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	reBold        = regexp.MustCompile(`\*\*(.+?)\*\*`)

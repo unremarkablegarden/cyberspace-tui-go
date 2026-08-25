@@ -6,6 +6,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const LoadMoreInnerHeight = 1 // Single string
+const LoadMoreContentMessage = "▼ LOAD MORE POSTS ▼"
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOAD MORE ITEM — sentinel item at the bottom of the list
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -18,15 +21,11 @@ func (l LoadMoreItem) Title() string       { return "LOAD MORE" }
 func (l LoadMoreItem) Description() string { return "" }
 
 func renderLoadMoreCard(selected bool, width int) string {
-	innerWidth := width - 4
-	if innerWidth < 20 {
-		innerWidth = 76
-	}
+	innerWidth := max(width-4, 76)
 
-	content := "▼ LOAD MORE POSTS ▼"
-	contentWidth := lipgloss.Width(content)
+	contentWidth := lipgloss.Width(LoadMoreContentMessage)
 	padding := max((innerWidth-contentWidth)/2, 0)
-	centeredContent := strings.Repeat(" ", padding) + content
+	centeredContent := strings.Repeat(" ", padding) + LoadMoreContentMessage
 
-	return BuildCardBox(centeredContent, innerWidth, 1, selected)
+	return BuildCardBox(centeredContent, innerWidth, LoadMoreInnerHeight, selected)
 }
