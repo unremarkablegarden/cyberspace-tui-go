@@ -155,6 +155,9 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SwitchToNoteCompose:
 		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner, msg.Note, msg.IsEdit)
 		mm.ActiveModel = noteComposeModel
+	case messages.SwitchToSettings:
+		settingsModel := models.NewSettingsModel()
+		mm.ActiveModel = settingsModel
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)
 		mm.ActiveModel = themeSwitcherModel

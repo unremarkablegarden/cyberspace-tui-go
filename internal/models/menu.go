@@ -105,7 +105,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case items.MenuSectionBookmarks:
 					view = messages.SwitchToBookmarks{}
 				case items.MenuSectionSettings:
-					view = messages.SwitchToThemeSwitcher{} // Tmp setting
+					view = messages.SwitchToSettings{}
 				default:
 					view = messages.SwitchToFeed{}
 				}
@@ -129,7 +129,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keymaps.ToKeybind(m.keybinds.MenuKeybinds.SectionBookmarks, "Bookmarks")):
 			return m, func() tea.Msg { return messages.SwitchToBookmarks{} }
 		case key.Matches(msg, keymaps.ToKeybind(m.keybinds.MenuKeybinds.SectionSettings, "Settings")):
-			return m, func() tea.Msg { return messages.SwitchToThemeSwitcher{} }
+			return m, func() tea.Msg { return messages.SwitchToSettings{} }
 
 			// Help
 		case key.Matches(msg, keymaps.ToKeybind(m.keybinds.GlobalKeybinds.Help, "?")):

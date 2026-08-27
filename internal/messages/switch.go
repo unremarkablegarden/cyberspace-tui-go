@@ -11,6 +11,7 @@ type (
 	SwitchToThemeSwitcher struct{}
 	SwitchToNotes         struct{}
 	SwitchToOwnProfile    struct{}
+	SwitchToSettings      struct{}
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
 	SwitchToEditProfile   struct{ User entities.User }
 	SwitchToNoteCompose   struct {
