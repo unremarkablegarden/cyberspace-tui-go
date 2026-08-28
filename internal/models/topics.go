@@ -138,7 +138,7 @@ func (m TopicsModel) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(ui.RenderHeader("▓▒░ TOPICS ░▒▓", w))
+	b.WriteString(ui.RenderHeader("▓▒░ 𝓣Øρเ¢ร ░▒▓", w))
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
 	b.WriteString(

@@ -79,7 +79,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			panic(fmt.Sprintf("Error saving theme info: %s", saveErr.Error()))
 		}
 
-		return mm, func() tea.Msg { return messages.SwitchToFeed{} }
+		return mm, func() tea.Msg { return messages.SwitchToSettings{} }
 
 	case messages.LogoutMsg:
 		if rmErr := mm.RemoveAuthInfo(); rmErr != nil {
@@ -155,8 +155,11 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SwitchToNoteCompose:
 		noteComposeModel := models.NewNoteComposeModel(mm.CyberClient, mm.Config.Keybinds, &mm.Spinner, msg.Note, msg.IsEdit)
 		mm.ActiveModel = noteComposeModel
+	case messages.SwitchToMenu:
+		menuModel := models.NewMenuModel(mm.Config.Keybinds)
+		mm.ActiveModel = menuModel
 	case messages.SwitchToSettings:
-		settingsModel := models.NewSettingsModel()
+		settingsModel := models.NewSettingsModel(mm.Config.Keybinds)
 		mm.ActiveModel = settingsModel
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)

@@ -31,8 +31,6 @@ type MenuItem struct {
 }
 
 func (mi MenuItem) FilterValue() string { return mi.Name }
-func (mi MenuItem) Title() string       { return "[" + mi.Name + "]" }
-func (mi MenuItem) Description() string { return "" }
 
 type MenuDelegate struct{}
 

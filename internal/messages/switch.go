@@ -9,6 +9,7 @@ type (
 	SwitchToTopics        struct{}
 	SwitchToCompose       struct{}
 	SwitchToThemeSwitcher struct{}
+	SwitchToMenu          struct{}
 	SwitchToNotes         struct{}
 	SwitchToOwnProfile    struct{}
 	SwitchToSettings      struct{}

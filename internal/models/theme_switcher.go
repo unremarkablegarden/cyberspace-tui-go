@@ -66,7 +66,7 @@ func (m ThemeSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.keys.GlobalKeybinds.Back:
 			// Revert to original theme
 			_ = styles.ApplyTheme(m.originalTheme)
-			return m, func() tea.Msg { return messages.SwitchToFeed{} }
+			return m, func() tea.Msg { return messages.SwitchToSettings{} }
 		case m.keys.GlobalKeybinds.Down:
 			if m.cursor < len(m.themes)-1 {
 				m.cursor++

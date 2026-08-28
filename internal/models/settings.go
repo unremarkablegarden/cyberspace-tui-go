@@ -12,12 +12,14 @@ type SettingsModel struct {
 	keybinds    keymaps.AppKeybinds
 }
 
-func NewSettingsModel() *SettingsModel {
-	return &SettingsModel{}
+func NewSettingsModel(keymap keymaps.AppKeybinds) *SettingsModel {
+	return &SettingsModel{
+		keybinds: keymap,
+	}
 }
 
 func (sm *SettingsModel) Init() tea.Cmd {
-	sm.activeModel = settingsmodels.NewSettingsIndexModel()
+	sm.activeModel = settingsmodels.NewSettingsIndexModel(sm.keybinds)
 	return nil
 }
 
