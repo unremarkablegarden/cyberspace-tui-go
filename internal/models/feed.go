@@ -32,31 +32,14 @@ type FeedModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        keymaps.AppKeybinds
+	keys        *keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewFeedModel creates a new feed screen
-func NewFeedModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) FeedModel {
-	// Create list with custom delegate
-	delegate := items.PostDelegate{}
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetShowHelp(false)
-	l.Styles = styles.ListStyles()
-
-	// Pagination dots: half blocks, bright for active, dim for inactive
-	l.Paginator.ActiveDot = styles.Bright.Render("▄")
-	l.Paginator.InactiveDot = styles.Dark.Render("▄")
-
-	// Disable list's built-in quit — we handle it ourselves
-	l.KeyMap.Quit.SetEnabled(false)
-	// Disable ForceQuit too (ctrl+c handled by main.go)
-	l.KeyMap.ForceQuit.SetEnabled(false)
+func NewFeedModel(client *api.Client, cache cache.ICache, keymap *keymaps.AppKeybinds, sp *spinner.Model) FeedModel {
+	l := list.New([]list.Item{}, items.PostDelegate{}, 0, 0)
+	items.ConfigList(&l)
 
 	h := help.New()
 	h.Styles = styles.HelpStyles()

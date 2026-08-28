@@ -7,9 +7,26 @@ type BookmarksKeyMap struct {
 	Remove string `json:"remove"`
 }
 
+func (bkm *BookmarksKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "bookmarks.remove",
+			Name:  "Bookmarks - Remove",
+			Value: bkm.Remove,
+		},
+	}
+}
+
+func (bkm *BookmarksKeyMap) Update(field string, value string) {
+	switch field {
+	case "remove":
+		bkm.Remove = value
+	}
+}
+
 // NewDefaultBookmarksKeyMap returns the default bookmarks keybindings.
-func NewDefaultBookmarksKeyMap() BookmarksKeyMap {
-	return BookmarksKeyMap{
+func NewDefaultBookmarksKeyMap() *BookmarksKeyMap {
+	return &BookmarksKeyMap{
 		Remove: "d",
 	}
 }

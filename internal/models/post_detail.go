@@ -39,7 +39,7 @@ type PostDetailModel struct {
 	currentUsername  string
 	width            int
 	height           int
-	keys             keymaps.AppKeybinds
+	keys             *keymaps.AppKeybinds
 	help             help.Model
 	viewport         viewport.Model
 	ready            bool // true once we've received a WindowSizeMsg
@@ -60,7 +60,7 @@ type PostDetailModel struct {
 func NewPostDetailModel(
 	client *api.Client,
 	cache cache.ICache,
-	keymap keymaps.AppKeybinds,
+	keymap *keymaps.AppKeybinds,
 	sp *spinner.Model,
 	post entities.Post,
 	currentUsername string,

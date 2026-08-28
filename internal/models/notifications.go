@@ -31,25 +31,14 @@ type NotificationsModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        keymaps.AppKeybinds
+	keys        *keymaps.AppKeybinds
 	help        help.Model
 }
 
 // NewNotificationsModel creates a new notifications screen
-func NewNotificationsModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model) NotificationsModel {
-	delegate := items.NotificationDelegate{}
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetShowHelp(false)
-	l.Styles = styles.ListStyles()
-	l.Paginator.ActiveDot = styles.Bright.Render("▄")
-	l.Paginator.InactiveDot = styles.Dark.Render("▄")
-	l.KeyMap.Quit.SetEnabled(false)
-	l.KeyMap.ForceQuit.SetEnabled(false)
+func NewNotificationsModel(client *api.Client, cache cache.ICache, keymap *keymaps.AppKeybinds, sp *spinner.Model) NotificationsModel {
+	l := list.New([]list.Item{}, items.NotificationDelegate{}, 0, 0)
+	items.ConfigList(&l)
 
 	h := help.New()
 	h.Styles = styles.HelpStyles()

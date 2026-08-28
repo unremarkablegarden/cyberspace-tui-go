@@ -8,9 +8,33 @@ type ProfileKeyMap struct {
 	EditProfile string `json:"edit_profile"`
 }
 
+func (pkm *ProfileKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "profile.follow",
+			Name:  "Profile - Follow",
+			Value: pkm.Follow,
+		},
+		{
+			ID:    "profile.edit_profile",
+			Name:  "Profile - Edit Profile",
+			Value: pkm.EditProfile,
+		},
+	}
+}
+
+func (pkm *ProfileKeyMap) Update(field string, value string) {
+	switch field {
+	case "follow":
+		pkm.Follow = value
+	case "edit_profile":
+		pkm.EditProfile = value
+	}
+}
+
 // NewDefaultProfileKeyMap returns the default profile keybindings.
-func NewDefaultProfileKeyMap() ProfileKeyMap {
-	return ProfileKeyMap{
+func NewDefaultProfileKeyMap() *ProfileKeyMap {
+	return &ProfileKeyMap{
 		Follow:      "f",
 		EditProfile: "e",
 	}

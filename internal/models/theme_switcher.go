@@ -25,13 +25,13 @@ type ThemeSwitcherModel struct {
 	cursor        int
 	width         int
 	height        int
-	keys          keymaps.AppKeybinds
+	keys          *keymaps.AppKeybinds
 	help          help.Model
 	originalTheme string // theme active when switcher was opened, for reverting on ESC
 }
 
 // NewThemeSwitcherModel creates a new theme switcher
-func NewThemeSwitcherModel(keymap keymaps.AppKeybinds) ThemeSwitcherModel {
+func NewThemeSwitcherModel(keymap *keymaps.AppKeybinds) ThemeSwitcherModel {
 	themes := styles.ListThemes()
 	current := styles.CurrentThemeName()
 

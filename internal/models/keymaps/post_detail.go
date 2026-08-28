@@ -11,9 +11,54 @@ type PostDetailKeyMap struct {
 	Profile string `json:"profile"`
 }
 
+func (pdkm *PostDetailKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "post_detail.reply",
+			Name:  "Post Detail - Reply",
+			Value: pdkm.Reply,
+		},
+		{
+			ID:    "post_detail.send",
+			Name:  "Post Detail - Send",
+			Value: pdkm.Send,
+		},
+		{
+			ID:    "post_detail.save",
+			Name:  "Post Detail - Save",
+			Value: pdkm.Save,
+		},
+		{
+			ID:    "post_detail.delete",
+			Name:  "Post Detail - Delete",
+			Value: pdkm.Delete,
+		},
+		{
+			ID:    "post_detail.profile",
+			Name:  "Post Detail - Profile",
+			Value: pdkm.Profile,
+		},
+	}
+}
+
+func (pdkm *PostDetailKeyMap) Update(field string, value string) {
+	switch field {
+	case "reply":
+		pdkm.Reply = value
+	case "send":
+		pdkm.Send = value
+	case "save":
+		pdkm.Save = value
+	case "delete":
+		pdkm.Delete = value
+	case "profile":
+		pdkm.Profile = value
+	}
+}
+
 // NewDefaultPostDetailKeyMap returns the default post detail keybindings.
-func NewDefaultPostDetailKeyMap() PostDetailKeyMap {
-	return PostDetailKeyMap{
+func NewDefaultPostDetailKeyMap() *PostDetailKeyMap {
+	return &PostDetailKeyMap{
 		Reply:   "c",
 		Send:    "ctrl+s",
 		Save:    "s",

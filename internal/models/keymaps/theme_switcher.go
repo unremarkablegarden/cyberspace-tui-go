@@ -6,8 +6,8 @@ import "github.com/charmbracelet/bubbles/key"
 type ThemeSwitcherKeyMap struct{}
 
 // NewDefaultThemeSwitcherKeyMap returns the default theme switcher keybindings.
-func NewDefaultThemeSwitcherKeyMap() ThemeSwitcherKeyMap {
-	return ThemeSwitcherKeyMap{}
+func NewDefaultThemeSwitcherKeyMap() *ThemeSwitcherKeyMap {
+	return &ThemeSwitcherKeyMap{}
 }
 
 func (ak *AppKeybinds) ThemeSwitcherHelpKeys() helpKeybinds {

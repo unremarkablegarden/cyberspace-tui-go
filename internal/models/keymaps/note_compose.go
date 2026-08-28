@@ -9,8 +9,38 @@ type NoteComposeKeyMap struct {
 	Cancel      string `json:"cancel"`
 }
 
-func NewDefaultNoteComposeKeyMap() NoteComposeKeyMap {
-	return NoteComposeKeyMap{
+func (nckm *NoteComposeKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "note_compose.switch_field",
+			Name:  "Note Compose - Switch Field",
+			Value: nckm.SwitchField,
+		},
+		{
+			ID:    "note_compose.save",
+			Name:  "Note Compose - Save",
+			Value: nckm.Save,
+		},
+		{
+			ID:    "note_compose.cancel",
+			Name:  "Note Compose - Cancel",
+			Value: nckm.Cancel,
+		},
+	}
+}
+func (nckm *NoteComposeKeyMap) Update(field string, value string) {
+	switch field {
+	case "switch_field":
+		nckm.SwitchField = value
+	case "save":
+		nckm.Save = value
+	case "cancel":
+		nckm.Cancel = value
+	}
+}
+
+func NewDefaultNoteComposeKeyMap() *NoteComposeKeyMap {
+	return &NoteComposeKeyMap{
 		SwitchField: "tab",
 		Save:        "ctrl+s",
 		Cancel:      "esc",

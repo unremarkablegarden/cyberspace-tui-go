@@ -7,8 +7,25 @@ type TopicFeedKeyMap struct {
 	Profile string `json:"profile"`
 }
 
-func NewDefaultTopicFeedKeyMap() TopicFeedKeyMap {
-	return TopicFeedKeyMap{
+func (tfkm *TopicFeedKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "topics_feed.profile",
+			Name:  "Topics Feed - Profile",
+			Value: tfkm.Profile,
+		},
+	}
+}
+
+func (tfkm *TopicFeedKeyMap) Update(field string, value string) {
+	switch field {
+	case "profile":
+		tfkm.Profile = value
+	}
+}
+
+func NewDefaultTopicFeedKeyMap() *TopicFeedKeyMap {
+	return &TopicFeedKeyMap{
 		Profile: "p",
 	}
 }

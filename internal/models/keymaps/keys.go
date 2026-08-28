@@ -1,31 +1,34 @@
 package keymaps
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
 )
 
 type AppKeybinds struct {
-	BookmarksKeybinds     BookmarksKeyMap     `json:"bookmarks"`
-	FeedKeybinds          FeedKeyMap          `json:"feed"`
-	GlobalKeybinds        GlobalKeyMaps       `json:"global"`
-	MenuKeybinds          MenuKeymaps         `json:"menu"`
-	NotesKeybinds         NotesKeyMap         `json:"notes"`
-	NoteComposeKeybinds   NoteComposeKeyMap   `json:"note_compose"`
-	NotificationsKeybinds NotificationsKeyMap `json:"notifications"`
-	PostDetailKeybinds    PostDetailKeyMap    `json:"post_detail"`
-	ProfileKeybinds       ProfileKeyMap       `json:"profile"`
-	ThemeSwitcherKeybinds ThemeSwitcherKeyMap `json:"theme_switcher"`
-	TopicsKeybinds        TopicsKeyMap        `json:"topics"`
-	TopicsFeedKeybinds    TopicFeedKeyMap     `json:"topics_feed"`
+	BookmarksKeybinds     *BookmarksKeyMap     `json:"bookmarks"`
+	FeedKeybinds          *FeedKeyMap          `json:"feed"`
+	GlobalKeybinds        *GlobalKeyMaps       `json:"global"`
+	MenuKeybinds          *MenuKeymaps         `json:"menu"`
+	NotesKeybinds         *NotesKeyMap         `json:"notes"`
+	NoteComposeKeybinds   *NoteComposeKeyMap   `json:"note_compose"`
+	NotificationsKeybinds *NotificationsKeyMap `json:"notifications"`
+	PostDetailKeybinds    *PostDetailKeyMap    `json:"post_detail"`
+	ProfileKeybinds       *ProfileKeyMap       `json:"profile"`
+	ThemeSwitcherKeybinds *ThemeSwitcherKeyMap `json:"theme_switcher"`
+	TopicsKeybinds        *TopicsKeyMap        `json:"topics"`
+	TopicsFeedKeybinds    *TopicFeedKeyMap     `json:"topics_feed"`
 }
 
-type helpKeybinds struct {
-	short []key.Binding
-	full  [][]key.Binding
+type KeybindMetadata struct {
+	ID    string
+	Name  string
+	Value string
 }
 
-func NewDefaultAppKeymaps() AppKeybinds {
-	return AppKeybinds{
+func NewDefaultAppKeymaps() *AppKeybinds {
+	return &AppKeybinds{
 		BookmarksKeybinds:     NewDefaultBookmarksKeyMap(),
 		FeedKeybinds:          NewDefaultFeedKeyMap(),
 		GlobalKeybinds:        NewDefaultGlobalKeyMaps(),
@@ -39,7 +42,46 @@ func NewDefaultAppKeymaps() AppKeybinds {
 		TopicsKeybinds:        NewDefaultTopicsKeyMap(),
 		TopicsFeedKeybinds:    NewDefaultTopicFeedKeyMap(),
 	}
+}
 
+func (ak *AppKeybinds) GetKeybindsMap() []KeybindMetadata {
+	var list []KeybindMetadata
+
+	list = append(list, ak.GlobalKeybinds.GetMetadata()...)
+	list = append(list, ak.FeedKeybinds.GetMetadata()...)
+	list = append(list, ak.PostDetailKeybinds.GetMetadata()...)
+	list = append(list, ak.MenuKeybinds.GetMetadata()...)
+	list = append(list, ak.BookmarksKeybinds.GetMetadata()...)
+	list = append(list, ak.NotesKeybinds.GetMetadata()...)
+	list = append(list, ak.NoteComposeKeybinds.GetMetadata()...)
+	list = append(list, ak.NotificationsKeybinds.GetMetadata()...)
+	list = append(list, ak.ProfileKeybinds.GetMetadata()...)
+	list = append(list, ak.TopicsFeedKeybinds.GetMetadata()...)
+
+	return list
+}
+
+func (ak *AppKeybinds) UpdateKeybind(id string, value string) {
+	splitted := strings.Split(id, ".")
+
+	// not valid format for "parent.field"
+	if len(splitted) != 2 {
+		return
+	}
+
+	switch splitted[0] {
+	case "global":
+		ak.GlobalKeybinds.Update(splitted[1], value)
+	case "bookmarks":
+		ak.BookmarksKeybinds.Update(splitted[1], value)
+	case "feed":
+		ak.FeedKeybinds.Update(splitted[1], value)
+	}
+}
+
+type helpKeybinds struct {
+	short []key.Binding
+	full  [][]key.Binding
 }
 
 func (hk helpKeybinds) ShortHelp() []key.Binding {

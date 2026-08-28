@@ -335,3 +335,15 @@ func BuildListItems(
 
 	return items
 }
+func ConfigList(list *list.Model) {
+	list.SetShowTitle(false)
+	list.SetShowFilter(false)
+	list.SetFilteringEnabled(false)
+	list.SetShowStatusBar(false)
+	list.SetShowPagination(false)
+	list.SetShowHelp(false)
+	list.DisableQuitKeybindings()
+	list.Paginator.ActiveDot = styles.Bright.Render("▄")
+	list.Paginator.InactiveDot = styles.Dark.Render("▄")
+	list.Styles = styles.ListStyles()
+}

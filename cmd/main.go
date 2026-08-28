@@ -15,6 +15,7 @@ import (
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/external/cache"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/messages"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models"
+	"github.com/unremarkablegarden/cyberspace-tui-go/internal/models/items"
 	"github.com/unremarkablegarden/cyberspace-tui-go/internal/ui"
 )
 
@@ -88,6 +89,14 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return mm, tea.Quit
 
+	case messages.SaveKeymaps:
+		if saveErr := mm.SaveKeybindsInfo(); saveErr != nil {
+			panic(fmt.Sprintf("Error saving keybinds info: %s", saveErr.Error()))
+		}
+		return mm, func() tea.Msg {
+			return messages.SwitchToSettings{Setting: uint8(items.SettingsIndexKeybind)}
+		}
+
 	// Elements
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -159,7 +168,7 @@ func (mm *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		menuModel := models.NewMenuModel(mm.Config.Keybinds)
 		mm.ActiveModel = menuModel
 	case messages.SwitchToSettings:
-		settingsModel := models.NewSettingsModel(mm.Config.Keybinds)
+		settingsModel := models.NewSettingsModel(mm.Config.Keybinds, msg.Setting)
 		mm.ActiveModel = settingsModel
 	case messages.SwitchToThemeSwitcher:
 		themeSwitcherModel := models.NewThemeSwitcherModel(mm.Config.Keybinds)

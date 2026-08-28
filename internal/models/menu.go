@@ -17,13 +17,13 @@ import (
 
 type MenuModel struct {
 	list     list.Model
-	keybinds keymaps.AppKeybinds
+	keybinds *keymaps.AppKeybinds
 	help     help.Model
 	width    int
 	height   int
 }
 
-func NewMenuModel(keymap keymaps.AppKeybinds) MenuModel {
+func NewMenuModel(keymap *keymaps.AppKeybinds) MenuModel {
 	li := []list.Item{
 		items.MenuItem{
 			Name: "Feed", Field: items.MenuSectionFeed,
@@ -60,13 +60,7 @@ func NewMenuModel(keymap keymaps.AppKeybinds) MenuModel {
 	}
 
 	l := list.New(li, items.MenuDelegate{}, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetShowHelp(false)
-	l.Styles = styles.ListStyles()
+	items.ConfigList(&l)
 
 	h := help.New()
 	h.Styles = styles.HelpStyles()
@@ -112,6 +106,8 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				return m, func() tea.Msg { return view }
 			}
+		case msg.String() == m.keybinds.GlobalKeybinds.Quit:
+			return m, tea.Quit
 
 			// Shorcuts
 		case key.Matches(msg, keymaps.ToKeybind(m.keybinds.MenuKeybinds.SectionFeed, "Feed")):

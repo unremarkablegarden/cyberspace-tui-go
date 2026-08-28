@@ -34,3 +34,5 @@ Stuff found while working on the code
 - [ ] Support for custom footer messages
 - [ ] Re do a lot of stuff in post detail to simplify
 - [ ] Reply only works for main post, no other comments
+- [ ] Better way to debug app
+- [ ] Logic to avoid conflicts between keybinds

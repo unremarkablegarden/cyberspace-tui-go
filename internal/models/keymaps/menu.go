@@ -13,8 +13,73 @@ type MenuKeymaps struct {
 	SectionSettings      string `json:"section_settings"`
 }
 
-func NewDefaultMenuKeyMap() MenuKeymaps {
-	return MenuKeymaps{
+func (mkm *MenuKeymaps) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "menu.feed",
+			Name:  "Menu - Feed",
+			Value: mkm.SectionFeed,
+		},
+		{
+			ID:    "menu.compose",
+			Name:  "Menu - Compose",
+			Value: mkm.SectionCompose,
+		},
+		{
+			ID:    "menu.notifications",
+			Name:  "Menu - Notifications",
+			Value: mkm.SectionNotifications,
+		},
+		{
+			ID:    "menu.profile",
+			Name:  "Menu - Profile",
+			Value: mkm.SectionOwnProfile,
+		},
+		{
+			ID:    "menu.notes",
+			Name:  "Menu - Notes",
+			Value: mkm.SectionNotes,
+		},
+		{
+			ID:    "menu.topics",
+			Name:  "Menu - Topics",
+			Value: mkm.SectionTopics,
+		},
+		{
+			ID:    "menu.bookmarks",
+			Name:  "Menu - Bookmarks",
+			Value: mkm.SectionBookmarks,
+		},
+		{
+			ID:    "menu.settings",
+			Name:  "Menu - Settings",
+			Value: mkm.SectionSettings,
+		},
+	}
+}
+func (mkm *MenuKeymaps) Update(field string, value string) {
+	switch field {
+	case "feed":
+		mkm.SectionFeed = value
+	case "compose":
+		mkm.SectionCompose = value
+	case "notifications":
+		mkm.SectionNotifications = value
+	case "profile":
+		mkm.SectionOwnProfile = value
+	case "notes":
+		mkm.SectionNotes = value
+	case "topics":
+		mkm.SectionTopics = value
+	case "bookmarks":
+		mkm.SectionBookmarks = value
+	case "settings":
+		mkm.SectionSettings = value
+	}
+}
+
+func NewDefaultMenuKeyMap() *MenuKeymaps {
+	return &MenuKeymaps{
 		SectionFeed:          "1",
 		SectionCompose:       "2",
 		SectionNotifications: "3",

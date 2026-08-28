@@ -33,24 +33,13 @@ type TopicFeedModel struct {
 	hasMore     bool
 	width       int
 	height      int
-	keys        keymaps.AppKeybinds
+	keys        *keymaps.AppKeybinds
 	help        help.Model
 }
 
-func NewTopicFeedModel(client *api.Client, cache cache.ICache, keymap keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
-	delegate := items.PostDelegate{}
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetShowHelp(false)
-	l.Styles = styles.ListStyles()
-	l.Paginator.ActiveDot = styles.Bright.Render("▄")
-	l.Paginator.InactiveDot = styles.Dark.Render("▄")
-	l.KeyMap.Quit.SetEnabled(false)
-	l.KeyMap.ForceQuit.SetEnabled(false)
+func NewTopicFeedModel(client *api.Client, cache cache.ICache, keymap *keymaps.AppKeybinds, sp *spinner.Model, topic entities.Topic) TopicFeedModel {
+	l := list.New([]list.Item{}, items.PostDelegate{}, 0, 0)
+	items.ConfigList(&l)
 
 	h := help.New()
 	h.Styles = styles.HelpStyles()

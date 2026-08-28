@@ -12,7 +12,7 @@ type (
 	SwitchToMenu          struct{}
 	SwitchToNotes         struct{}
 	SwitchToOwnProfile    struct{}
-	SwitchToSettings      struct{}
+	SwitchToSettings      struct{ Setting uint8 }
 	SwitchToTopicFeed     struct{ Topic entities.Topic }
 	SwitchToEditProfile   struct{ User entities.User }
 	SwitchToNoteCompose   struct {

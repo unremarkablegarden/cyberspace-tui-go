@@ -16,25 +16,20 @@ import (
 
 type SettingsIndexModel struct {
 	list     list.Model
-	keybinds keymaps.AppKeybinds
+	keybinds *keymaps.AppKeybinds
 	help     help.Model
 	width    int
 	height   int
 }
 
-func NewSettingsIndexModel(keymap keymaps.AppKeybinds) *SettingsIndexModel {
+func NewSettingsIndexModel(keymap *keymaps.AppKeybinds) *SettingsIndexModel {
 	li := []list.Item{
 		items.SettingsIndexItem{Name: "Themes", Field: items.SettingsIndexTheme},
+		items.SettingsIndexItem{Name: "Keybinds", Field: items.SettingsIndexKeybind},
 	}
 
 	l := list.New(li, items.SettingsIndexDelegate{}, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetShowHelp(false)
-	l.Styles = styles.ListStyles()
+	items.ConfigList(&l)
 
 	h := help.New()
 	h.Styles = styles.HelpStyles()
@@ -69,7 +64,8 @@ func (sim *SettingsIndexModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch item.(items.SettingsIndexItem).Field {
 				case items.SettingsIndexTheme:
 					openSetting = messages.SwitchToThemeSwitcher{}
-				default:
+				case items.SettingsIndexKeybind:
+					openSetting = messages.SwitchToSettings{Setting: uint8(items.SettingsIndexKeybind)}
 				}
 
 				return sim, func() tea.Msg { return openSetting }
@@ -83,7 +79,9 @@ func (sim *SettingsIndexModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sim.list.SetSize(msg.Width, msg.Height-4)
 	}
 
-	return sim, nil
+	var cmd tea.Cmd
+	sim.list, cmd = sim.list.Update(msg)
+	return sim, cmd
 }
 
 func (sim *SettingsIndexModel) View() string {

@@ -5,8 +5,8 @@ import "github.com/charmbracelet/bubbles/key"
 // TopicsKeyMap defines keybindings for the topics browser.
 type TopicsKeyMap struct{}
 
-func NewDefaultTopicsKeyMap() TopicsKeyMap {
-	return TopicsKeyMap{}
+func NewDefaultTopicsKeyMap() *TopicsKeyMap {
+	return &TopicsKeyMap{}
 }
 
 func (ak *AppKeybinds) TopicsHelpKeys() helpKeybinds {

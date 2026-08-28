@@ -22,7 +22,7 @@ const DefaultCacheFilename = "cache.gob"
 type appConfig struct {
 	Auth       appAuth
 	Theme      appTheme
-	Keybinds   keymaps.AppKeybinds
+	Keybinds   *keymaps.AppKeybinds
 	ConfigPath string
 }
 
@@ -76,7 +76,7 @@ func (mm *MainModel) loadKeybinds() {
 			panic(fmt.Sprintf("Error unmarshalling theme json: %s", err.Error()))
 		}
 
-		mm.Config.Keybinds = appK
+		mm.Config.Keybinds = &appK
 	} else {
 		mm.Config.Keybinds = keymaps.NewDefaultAppKeymaps()
 

@@ -9,8 +9,39 @@ type NotesKeyMap struct {
 	Delete string `json:"delete"`
 }
 
-func NewDefaultNotesKeyMap() NotesKeyMap {
-	return NotesKeyMap{
+func (nkm *NotesKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "notes.new",
+			Name:  "Notes - New",
+			Value: nkm.New,
+		},
+		{
+			ID:    "notes.edit",
+			Name:  "Notes - Edit",
+			Value: nkm.Edit,
+		},
+		{
+			ID:    "notes.delete",
+			Name:  "Notes - Delete",
+			Value: nkm.Delete,
+		},
+	}
+}
+
+func (nkm *NotesKeyMap) Update(field string, value string) {
+	switch field {
+	case "new":
+		nkm.New = value
+	case "edit":
+		nkm.Edit = value
+	case "delete":
+		nkm.Delete = value
+	}
+}
+
+func NewDefaultNotesKeyMap() *NotesKeyMap {
+	return &NotesKeyMap{
 		New:    "n",
 		Edit:   "e",
 		Delete: "d",

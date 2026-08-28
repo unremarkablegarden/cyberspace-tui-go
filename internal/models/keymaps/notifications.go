@@ -7,9 +7,26 @@ type NotificationsKeyMap struct {
 	MarkAllRead string `json:"mark_all_read"`
 }
 
+func (nkm *NotificationsKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "notifications.mark_all_read",
+			Name:  "Notifications - Mark All Read",
+			Value: nkm.MarkAllRead,
+		},
+	}
+}
+
+func (nkm *NotificationsKeyMap) Update(field string, value string) {
+	switch field {
+	case "mark_all_read":
+		nkm.MarkAllRead = value
+	}
+}
+
 // NewDefaultNotificationsKeyMap returns the default notifications keybindings.
-func NewDefaultNotificationsKeyMap() NotificationsKeyMap {
-	return NotificationsKeyMap{
+func NewDefaultNotificationsKeyMap() *NotificationsKeyMap {
+	return &NotificationsKeyMap{
 		MarkAllRead: "a",
 	}
 }

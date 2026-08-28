@@ -31,13 +31,13 @@ type NoteComposeModel struct {
 	err         error
 	width       int
 	height      int
-	keys        keymaps.AppKeybinds
+	keys        *keymaps.AppKeybinds
 	help        help.Model
 	spinner     *spinner.Model
 }
 
 // NewNoteComposeModel creates a note compose/edit screen
-func NewNoteComposeModel(client *api.Client, keymap keymaps.AppKeybinds, sp *spinner.Model, note entities.Note, isEdit bool) NoteComposeModel {
+func NewNoteComposeModel(client *api.Client, keymap *keymaps.AppKeybinds, sp *spinner.Model, note entities.Note, isEdit bool) NoteComposeModel {
 	ta := textarea.New()
 	ta.Placeholder = "Write your note..."
 	ta.SetHeight(10)

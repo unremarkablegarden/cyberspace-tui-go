@@ -9,10 +9,34 @@ type FeedKeyMap struct {
 }
 
 // NewDefaultFeedKeyMap returns the default feed keybindings.
-func NewDefaultFeedKeyMap() FeedKeyMap {
-	return FeedKeyMap{
+func NewDefaultFeedKeyMap() *FeedKeyMap {
+	return &FeedKeyMap{
 		Logout:  "L",
 		Profile: "p",
+	}
+}
+
+func (fkm *FeedKeyMap) GetMetadata() []KeybindMetadata {
+	return []KeybindMetadata{
+		{
+			ID:    "feed.logout",
+			Name:  "Feed - Logout",
+			Value: fkm.Logout,
+		},
+		{
+			ID:    "feed.profile",
+			Name:  "Feed - Profile",
+			Value: fkm.Profile,
+		},
+	}
+}
+
+func (fkm *FeedKeyMap) Update(field string, value string) {
+	switch field {
+	case "logout":
+		fkm.Logout = value
+	case "profile":
+		fkm.Profile = value
 	}
 }
 
